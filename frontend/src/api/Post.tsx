@@ -1,6 +1,8 @@
 import api from "./axois";
+import axios from "axios";
 import { AxiosError } from "axios";
 import { APIErrorResponse } from "../types/errors";
+
 
 export interface CreatePostPayload {
   content?: string | null;
@@ -10,6 +12,7 @@ export interface CreatePostPayload {
   repostComment?: string | null;
   postType?: "public" | "connection-only";
   postFormat?: "standard" | "article";
+  media?: string[];
 }
 
 export interface PostResponse {
@@ -19,40 +22,80 @@ export interface PostResponse {
 
 export const createPost = async (
   data: CreatePostPayload,
-  mediaFiles?: File[] | null
+  mediaFiles?: File[] | null,
+  onProgress?: (progress: number) => void,
+  setCancelUpload?: (fn: (() => void) | null) => void
 ): Promise<PostResponse> => {
-  const formData = new FormData();
+  const mediaUrls: string[] = [];
 
   if (mediaFiles && mediaFiles.length > 0) {
-    mediaFiles.forEach((file) => formData.append("media", file));
-  }
+    const totalSize = mediaFiles.reduce((sum, file) => sum + file.size, 0);
+    let uploadedBytes = 0;
 
-  if (data.content) formData.append("content", data.content);
-  if (data.hashtags) formData.append("hashtags", data.hashtags);
-  if (data.repostComment) formData.append("repostComment", data.repostComment);
-  if (data.isRepost !== undefined)
-    formData.append("isRepost", String(data.isRepost));
-  if (data.originalPostId)
-    formData.append("originalPostId", String(data.originalPostId));
-  if (data.postType) formData.append("postType", data.postType);
-  if (data.postFormat) formData.append("postFormat", data.postFormat);
+    for (let i = 0; i < mediaFiles.length; i++) {
+      const file = mediaFiles[i];
 
-  try {
-    const res = await api.post<PostResponse>("/posts", formData, {
-      headers: { "Content-Type": "multipart/form-data" },
-    });
-    return res.data;
-  } catch (error) {
-    if (error instanceof AxiosError && error.response) {
-      throw (
-        (error.response.data as APIErrorResponse) || {
-          message: "Unknown API error",
+      const sigRes = await api.get("/posts/signature");
+      const { apiKey, cloudName, folder, timestamp, signature } = sigRes.data;
+
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("api_key", apiKey);
+      formData.append("timestamp", timestamp);
+      formData.append("signature", signature);
+      formData.append("folder", folder);
+
+      
+      // const controller = new AbortController();
+      // if (setCancelUpload) {
+      //   setCancelUpload(() => controller.abort);
+      // }
+
+      const controller = new AbortController();
+      if (setCancelUpload) {
+        setCancelUpload(() => () => controller.abort());
+      }
+
+      try {
+        const res = await axios.post(
+          `https://api.cloudinary.com/v1_1/${cloudName}/auto/upload`,
+          formData,
+          {
+            signal: controller.signal,
+            onUploadProgress: (event) => {
+              if (event.total && onProgress) {
+                const totalUploadedNow = uploadedBytes + event.loaded;
+                const progress = Math.round(
+                  (totalUploadedNow / totalSize) * 100
+                );
+                onProgress(progress);
+              }
+            },
+          }
+        );
+
+        uploadedBytes += file.size;
+        mediaUrls.push(res.data.secure_url);
+      }catch (error: unknown) {
+        if (error instanceof Error && error.message === "canceled") {
+          // console.log("Upload canceled by user"); 
+          throw new Error("Upload canceled");
+          // return; 
+        } else {
+          console.error("Upload failed:", error);
+          throw error;
         }
-      );
+      }
     }
-    throw error;
   }
+
+  if (setCancelUpload) setCancelUpload(null);
+
+  const payload = { ...data, media: mediaUrls };
+  const res = await api.post<PostResponse>("/posts", payload);
+  return res.data;
 };
+
 
 //get
 export interface AuthorProfile {
@@ -242,60 +285,23 @@ export const getPostComments = async (
   }
 };
 
-export interface PostRepostUser {
-  id: number;
-  email: string;
-  profile: {
-    name: string;
-  };
-  repostComment?: string | null;
-  createdAt: string;
-}
-
-interface MediaItem {
-  url: string;
-  type: "image" | "video" | "document";
-}
-
 
 export interface RepostWithUser {
   repostId: number;
   repostComment?: string | null;
+  createdAt?: string;
   user: {
     id: number | null;
     email: string | null;
     name: string | null;
   };
-  originalPost: {
-    author: {
-      name: string | null;
-    };
-    content: string | null;
-    // media: any[];
-     media: MediaItem[];
-  };
 }
-
-
-
-
 
 export const getPostReposts = async (
   postId: number
-): Promise<PostRepostUser[]> => {
-  try {
-    const res = await api.get<{ reposts: PostRepostUser[] }>(
-      `/posts/${postId}/reposts`
-    );
-    return res.data.reposts || res.data;
-  } catch (error) {
-    if (error instanceof AxiosError && error.response) {
-      throw (
-        (error.response.data as APIErrorResponse) || {
-          message: "Failed to fetch post reposts",
-        }
-      );
-    }
-    throw error;
-  }
+): Promise<RepostWithUser[]> => {
+  const res = await api.get<{ reposts: RepostWithUser[] }>(
+    `/posts/${postId}/reposts`
+  );
+  return res.data.reposts;
 };

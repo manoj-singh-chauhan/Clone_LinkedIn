@@ -1,5 +1,5 @@
 import { Post } from "./post.model";
-import cloudinary from "../../config/cloudinary.config";
+// import cloudinary from "../../config/cloudinary.config";
 import PostLike from "./post.postLike";
 import PostRepost from "./post.postRepost";
 import { PostComment } from "./post.postComment";
@@ -10,49 +10,21 @@ import { Op } from "sequelize";
 
 type AllowedMediaType = "image" | "video" | "document";
 
-//Cloudnary
-async function uploadToCloudinary(file: Express.Multer.File) {
-  return new Promise((resolve, reject) => {
-    const resourceType = file.mimetype.startsWith("video") ? "video" : "auto";
-    const stream = cloudinary.uploader.upload_stream(
-      { folder: "linked_clone/post", resource_type: resourceType },
-      (error, result) => {
-        if (error) reject(error);
-        else resolve(result);
-      }
-    );
-    stream.end(file.buffer);
-  });
-}
-
-// CREATE POST
 export const PostService = {
-  createPost: async (
-    validatedBody: any,
-    userId: number,
-    files?: Express.Multer.File[]
-  ) => {
-    let media: { url: string; type: AllowedMediaType }[] = [];
+  createPost: async (validatedBody: any, userId: number) => {
+    const media: { url: string; type: AllowedMediaType }[] = [];
 
-    if (files && files.length > 0) {
-      for (const file of files) {
-        const result: any = await uploadToCloudinary(file);
+    if (validatedBody.media && Array.isArray(validatedBody.media)) {
+      for (const url of validatedBody.media) {
         let type: AllowedMediaType = "document";
-        if (file.mimetype.startsWith("image")) type = "image";
-        else if (file.mimetype.startsWith("video")) type = "video";
-
-        media.push({ url: result.secure_url, type });
+        if (url.match(/\.(jpeg|jpg|png|gif)$/)) type = "image";
+        else if (url.match(/\.(mp4|mov|avi)$/)) type = "video";
+        media.push({ url, type });
       }
     }
 
-    if (
-      !validatedBody.content &&
-      media.length === 0 &&
-      !validatedBody.originalPostId
-    ) {
-      const error = new Error(
-        "Post must contain content, files, or be a repost."
-      );
+    if (!validatedBody.content && media.length === 0 && !validatedBody.originalPostId) {
+      const error = new Error("Post must contain content, files, or be a repost.");
       (error as any).statusCode = 400;
       throw error;
     }
@@ -117,7 +89,7 @@ export const PostLikeService = {
 
       if (existingLike) {
         await existingLike.destroy({ transaction: t });
-        post.likeCount = Math.max(0, post.likeCount - 1);
+         post.likeCount = Math.max(0, post.likeCount - 1);
       } else {
         await PostLike.create({ postId, userId }, { transaction: t });
         post.likeCount += 1;

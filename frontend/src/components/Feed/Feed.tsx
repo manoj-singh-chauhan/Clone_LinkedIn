@@ -1,37 +1,35 @@
-import React, { useState, useEffect, useCallback, lazy, Suspense } from "react";
+import React, {
+  useState,
+  useCallback,
+  Suspense,
+  useMemo,
+  useRef,
+  useEffect,
+} from "react";
 import {
   fetchAllPosts,
-  Post as PostType,
   likePost,
   repostPost,
   commentPost,
   getPostComments,
   getPostReposts,
-  PostRepostUser,
-} from "../../api/Post";
+  Post as PostType,
+  // PostRepostUser,
+  RepostWithUser,
 
+} from "../../api/Post";
 import PostItem, {
-  // PostMediaGrid,
-  MediaItem,
   RepostingPost,
   PostCommentUser,
+  MediaItem,
 } from "./PostItem";
-
-// import {
-//   AiOutlineLike,
-//   AiOutlineComment,
-//   AiOutlineRetweet,
-// } from "react-icons/ai";
-// import { MdAccountCircle } from "react-icons/md";
-// import { FaRegFileAlt } from "react-icons/fa";
-// import { IoIosSend } from "react-icons/io";
-// import { BiCommentDetail } from "react-icons/bi";
 import { useAuth } from "../../context/AuthContext";
-// import { BsEmojiSmile } from "react-icons/bs";
+import RepostModal from "./RepostModal";
+import MediaLightbox from "./MediaLightbox";
+import RepostDialog from "./RepostDialog";
+// import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useQueryClient, InfiniteData } from "@tanstack/react-query";
 
-const RepostModal = lazy(() => import("./RepostModal"));
-const MediaLightbox = lazy(() => import("./MediaLightbox"));
-const RepostDialog = lazy(() => import("./RepostDialog"));
 
 interface CommentFromAPI {
   commentId?: number;
@@ -47,105 +45,109 @@ interface CommentFromAPI {
 
 const Feed: React.FC = () => {
   const { user } = useAuth();
-  const [posts, setPosts] = useState<PostType[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [activeCommentPost, setActiveCommentPost] = useState<number | null>(
-    null
-  );
-  const [commentTextMap, setCommentTextMap] = useState<Record<number, string>>(
-    {}
-  );
-  const [commentsMap, setCommentsMap] = useState<
-    Record<number, PostCommentUser[]>
-  >({});
+  const queryClient = useQueryClient();
+
+  const [activeCommentPost, setActiveCommentPost] = useState<number | null>(null);
+  const [commentTextMap, setCommentTextMap] = useState<Record<number, string>>({});
+  const [commentsMap, setCommentsMap] = useState<Record<number, PostCommentUser[]>>({});
   const [reposting, setReposting] = useState<RepostingPost | null>(null);
   const [isModalOpen, setIsModalOpen] = useState<PostType | null>(null);
-  const [likedPosts, setLikedPosts] = useState<Set<number>>(new Set());
-  const [repostedPosts, setRepostedPosts] = useState<Set<number>>(new Set());
-  const [repostPending, setRepostPending] = useState<Set<number>>(new Set());
   const [lightbox, setLightbox] = useState<{
     media: MediaItem[];
     index: number;
+    post: PostType;
+    // post?: PostType;
   } | null>(null);
-  const [showEmojiPickerFor, setShowEmojiPickerFor] = useState<number | null>(
-    null
-  );
+  const [showEmojiPickerFor, setShowEmojiPickerFor] = useState<number | null>(null);
   const [activeLikesBox, setActiveLikesBox] = useState<number | null>(null);
   const [repostModalPost, setRepostModalPost] = useState<PostType | null>(null);
-  const [repostList, setRepostList] = useState<PostRepostUser[]>([]);
+  // const [repostList, setRepostList] = useState<PostRepostUser[]>([]);
+  const [repostList, setRepostList] = useState<RepostWithUser[]>([]);
   const [repostLoading, setRepostLoading] = useState(false);
-  const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(true);
+  const [likedPosts, setLikedPosts] = useState<Set<number>>(new Set());
+  const [repostedPosts, setRepostedPosts] = useState<Set<number>>(new Set());
+  const [repostPending, setRepostPending] = useState<Set<number>>(new Set());
+  const observerRef = useRef<IntersectionObserver | null>(null);
+  
+
   const limit = 5;
 
+  
+  // const {
+  //   data,
+  //   fetchNextPage,
+  //   hasNextPage,
+  //   isFetchingNextPage,
+  //   isLoading,
+  //   isError,
+  // } = useInfiniteQuery<PostType[], Error, PostType[], string[], number>({
+  //   queryKey: ["posts"],
+  //   queryFn: async ({ pageParam = 1 }: { pageParam?: number }) => {
+  //     const res = await fetchAllPosts(pageParam, limit);
+  //     return res;
+  //   },
+  //   getNextPageParam: (lastPage, allPages) =>
+  //     lastPage.length < limit ? undefined : allPages.length + 1,
+  //   initialPageParam: 1,
+  // });
+
+const {
+  data,
+  fetchNextPage,
+  hasNextPage,
+  isFetchingNextPage,
+  isLoading,
+  isError,
+} = useInfiniteQuery<PostType[], Error, InfiniteData<PostType[]>, [string], number>({
+  queryKey: ["posts"],
+  queryFn: async ({ pageParam = 1 }) => {
+    const res = await fetchAllPosts(pageParam, limit);
+    return res;
+  },
+  getNextPageParam: (lastPage, allPages) =>
+    lastPage.length < limit ? undefined : allPages.length + 1,
+  initialPageParam: 1,
+});
+const posts = useMemo(() => data?.pages.flat() || [], [data]);
+
+useEffect(() => {
+  if (posts.length > 0) {
+    setLikedPosts(() => {
+      const newSet = new Set<number>();
+      posts.forEach((p) => {
+        if (p.likedByCurrentUser) newSet.add(p.id);
+      });
+      return newSet;
+    });
+
+    setRepostedPosts(() => {
+      const newSet = new Set<number>();
+      posts.forEach((p) => {
+        if (p.repostedByCurrentUser) newSet.add(p.id);
+      });
+      return newSet;
+    });
+  }
+}, [posts]);
+
+  
   const lastPostRef = useCallback(
-    (node: HTMLDivElement) => {
-      if (loading || !hasMore) return;
+    (node: HTMLDivElement | null) => {
+      if (isLoading || isFetchingNextPage) return;
+      if (observerRef.current) observerRef.current.disconnect();
 
-      const observer = new IntersectionObserver(
-        (entries) => {
-          if (entries[0].isIntersecting) {
-            setPage((prev) => prev + 1);
-          }
-        },
-        {
-          root: null, // viewport
-          rootMargin: "0px",
-          threshold: 0.1,
+      observerRef.current = new IntersectionObserver((entries) => {
+        if (entries[0].isIntersecting && hasNextPage) {
+          fetchNextPage();
         }
-      );
+      });
 
-      if (node) {
-        observer.observe(node);
-      }
-
-      return () => {
-        if (node) {
-          observer.unobserve(node);
-        }
-      };
+      if (node) observerRef.current.observe(node);
     },
-    [loading, hasMore]
+    [isLoading, isFetchingNextPage, fetchNextPage, hasNextPage]
   );
 
-  useEffect(() => {
-    const loadPosts = async () => {
-      if (page > 1 || posts.length === 0) {
-        setLoading(true);
-      }
-
-      try {
-        const fetchedPosts = await fetchAllPosts(page, limit);
-
-        if (fetchedPosts.length < limit) setHasMore(false);
-
-        const likedSet = new Set<number>();
-        const repostedSet = new Set<number>();
-        fetchedPosts.forEach((post) => {
-          if (post.likedByCurrentUser) likedSet.add(post.id);
-          if (post.repostedByCurrentUser) repostedSet.add(post.id);
-        });
-
-        setPosts((prev) => [...prev, ...fetchedPosts]);
-
-        setLikedPosts(
-          (prev) => new Set([...Array.from(prev), ...Array.from(likedSet)])
-        );
-        setRepostedPosts(
-          (prev) => new Set([...Array.from(prev), ...Array.from(repostedSet)])
-        );
-      } catch (err: unknown) {
-        if (err instanceof Error) setError(err.message);
-        else setError("Failed to fetch posts");
-      } finally {
-        setLoading(false);
-      }
-    };
-    loadPosts();
-  }, [page]);
-
-  const timeSince = useCallback((dateString: string): string => {
+  const timeSince = useCallback((dateString: string) => {
     const seconds = Math.floor(
       (new Date().getTime() - new Date(dateString).getTime()) / 1000
     );
@@ -169,26 +171,22 @@ const Feed: React.FC = () => {
       if (!user) return;
       try {
         const data = await likePost(postId);
-        setPosts((prev) =>
-          prev.map((p) =>
-            p.id === postId ? { ...p, likeCount: data.likeCount } : p
-          )
-        );
+        queryClient.invalidateQueries({ queryKey: ["posts"] });
         setLikedPosts((prev) => {
           const newSet = new Set(prev);
+          // data.liked ? newSet.add(postId) : newSet.delete(postId);
           if (data.liked) {
             newSet.add(postId);
           } else {
             newSet.delete(postId);
           }
-
           return newSet;
         });
       } catch (err) {
         console.error(err);
       }
     },
-    [user]
+    [user, queryClient]
   );
 
   const handleRepost = useCallback(
@@ -197,11 +195,7 @@ const Feed: React.FC = () => {
       setRepostPending((prev) => new Set(prev).add(postId));
       try {
         const data = await repostPost(postId, comment);
-        setPosts((prev) =>
-          prev.map((p) =>
-            p.id === postId ? { ...p, repostCount: data.repostCount } : p
-          )
-        );
+        queryClient.invalidateQueries({ queryKey: ["posts"] });
         if (data.reposted)
           setRepostedPosts((prev) => new Set(prev).add(postId));
         setReposting(null);
@@ -215,16 +209,16 @@ const Feed: React.FC = () => {
         });
       }
     },
-    [user, repostPending]
+    [user, repostPending, queryClient]
   );
 
-  const handleRepostFromModal = async (
-    postToRepost: PostType,
-    thought: string
-  ) => {
-    await handleRepost(postToRepost.id, thought?.trim() || "");
-    setIsModalOpen(null);
-  };
+  const handleRepostFromModal = useCallback(
+    async (postToRepost: PostType, thought: string) => {
+      await handleRepost(postToRepost.id, thought?.trim() || "");
+      setIsModalOpen(null);
+    },
+    [handleRepost]
+  );
 
   const handleCommentChange = useCallback((postId: number, text: string) => {
     setCommentTextMap((prev) => ({ ...prev, [postId]: text }));
@@ -234,20 +228,12 @@ const Feed: React.FC = () => {
     async (postId: number) => {
       const text = commentTextMap[postId]?.trim();
       if (!text) return;
-
       setCommentTextMap((prev) => ({ ...prev, [postId]: "" }));
-      setPosts((prev) =>
-        prev.map((p) =>
-          p.id === postId ? { ...p, commentCount: p.commentCount + 1 } : p
-        )
-      );
-
       try {
         const newComment: { comment: CommentFromAPI } = await commentPost(
           postId,
           text
         );
-
         const safeComment: PostCommentUser = {
           ...newComment.comment,
           user: newComment.comment.user || {
@@ -256,21 +242,16 @@ const Feed: React.FC = () => {
             email: "",
           },
         };
-
         setCommentsMap((prev) => ({
           ...prev,
           [postId]: [safeComment, ...(prev[postId] || [])],
         }));
+        queryClient.invalidateQueries({ queryKey: ["posts"] });
       } catch (err) {
         console.error(err);
-        setPosts((prev) =>
-          prev.map((p) =>
-            p.id === postId ? { ...p, commentCount: p.commentCount - 1 } : p
-          )
-        );
       }
     },
-    [commentTextMap]
+    [commentTextMap, queryClient]
   );
 
   const handleShowComments = useCallback(
@@ -280,7 +261,6 @@ const Feed: React.FC = () => {
         return;
       }
       setActiveCommentPost(postId);
-
       if (!commentsMap[postId]) {
         try {
           const comments = await getPostComments(postId);
@@ -293,82 +273,104 @@ const Feed: React.FC = () => {
     [activeCommentPost, commentsMap]
   );
 
-  const handleShowReposts = async (post: PostType) => {
+  const handleShowReposts = useCallback(async (post: PostType) => {
     setRepostModalPost(post);
     setRepostLoading(true);
     try {
       const reposts = await getPostReposts(post.id);
       setRepostList(reposts);
-    } catch (err) {
-      console.error(err);
+    } catch {
       setRepostList([]);
     } finally {
       setRepostLoading(false);
     }
-  };
+  }, []);
 
-  if (posts.length === 0 && loading)
+  const memoizedPosts = useMemo(
+    () =>
+      posts.map((post, index) => {
+        const isLastPost = index === posts.length - 1;
+        return (
+          <PostItem
+            key={post.id}
+            post={post}
+            isLiked={likedPosts.has(post.id)}
+            isReposted={repostedPosts.has(post.id)}
+            isCommentSectionOpen={activeCommentPost === post.id}
+            commentText={commentTextMap[post.id] || ""}
+            comments={commentsMap[post.id] || []}
+            showEmojiPicker={showEmojiPickerFor === post.id}
+            isRepostDropdownOpen={
+              reposting?.post.id === post.id && reposting.openDropdown
+            }
+            activeLikesBoxId={activeLikesBox}
+            timeSince={timeSince}
+            handleLike={handleLike}
+            handleShowComments={handleShowComments}
+            handleCommentChange={handleCommentChange}
+            handleCommentSubmit={handleCommentSubmit}
+            handleRepost={handleRepost}
+            handleShowReposts={handleShowReposts}
+            setLightbox={setLightbox}
+            setActiveLikesBox={setActiveLikesBox}
+            setShowEmojiPickerFor={setShowEmojiPickerFor}
+            setReposting={setReposting}
+            setIsModalOpen={setIsModalOpen}
+            isLastPost={isLastPost}
+            lastPostRef={lastPostRef}
+          />
+        );
+      }),
+    [
+      posts,
+      likedPosts,
+      repostedPosts,
+      activeCommentPost,
+      commentTextMap,
+      commentsMap,
+      showEmojiPickerFor,
+      reposting,
+      activeLikesBox,
+      timeSince,
+      handleLike,
+      handleShowComments,
+      handleCommentChange,
+      handleCommentSubmit,
+      handleRepost,
+      handleShowReposts,
+      setLightbox,
+      setActiveLikesBox,
+      setShowEmojiPickerFor,
+      setReposting,
+      setIsModalOpen,
+      lastPostRef,
+    ]
+  );
+
+  if (isLoading) {
     return <p className="text-center p-8">Loading feed...</p>;
-  if (error) return <p className="text-center p-8 text-red-500">{error}</p>;
-  if (posts.length === 0 && !loading)
-    return <p className="text-center p-8 text-gray-500">No posts available.</p>;
+  }
+
+  if (isError) {
+    return <p className="text-center p-8 text-red-500">Failed to load feed.</p>;
+  }
+
+  if (posts.length === 0) {
+    return (
+      <p className="text-center p-8 text-gray-500">No posts available.</p>
+    );
+  }
 
   return (
     <>
-      <div className="max-w-[42rem] mx-auto space-y-4 px-1 sm:px-0">
-        <Suspense fallback={<p>Loading...</p>}>
-          {posts.map((post, index) => {
-            const isLastPost = index === posts.length - 1;
-
-            
-            const isLiked = likedPosts.has(post.id);
-            const isReposted = repostedPosts.has(post.id);
-            const isCommentSectionOpen = activeCommentPost === post.id;
-            const commentText = commentTextMap[post.id] || "";
-            const comments = commentsMap[post.id] || [];
-            const showEmojiPicker = showEmojiPickerFor === post.id;
-            const isRepostDropdownOpen = reposting?.post.id === post.id && reposting.openDropdown;
-            
-
-            return (
-              <PostItem
-                key={post.id}
-                post={post}
-                isLiked={isLiked}
-                isReposted={isReposted}
-                isCommentSectionOpen={isCommentSectionOpen}
-                commentText={commentText}
-                comments={comments}
-                showEmojiPicker={showEmojiPicker}
-                isRepostDropdownOpen={isRepostDropdownOpen}
-                activeLikesBoxId={activeLikesBox}
-                timeSince={timeSince}
-                handleLike={handleLike}
-                handleShowComments={handleShowComments}
-                handleCommentChange={handleCommentChange}
-                handleCommentSubmit={handleCommentSubmit}
-                handleRepost={handleRepost}
-                handleShowReposts={handleShowReposts}
-                setLightbox={setLightbox}
-                setActiveLikesBox={setActiveLikesBox}
-                setShowEmojiPickerFor={setShowEmojiPickerFor}
-                setReposting={setReposting}
-                setIsModalOpen={setIsModalOpen}
-                // Infinite Scroll Ref
-                isLastPost={isLastPost}
-                lastPostRef={lastPostRef}
-              />
-            );
-          })}
-        </Suspense>
-
-        {hasMore && loading && (
+      <div className="max-w-[42rem] mx-auto space-y-1 px-1 sm:px-0">
+        <Suspense fallback={<p>Loading...</p>}>{memoizedPosts}</Suspense>
+        {isFetchingNextPage && (
           <p className="text-center p-4 text-blue-600">Loading more posts...</p>
         )}
       </div>
 
       <Suspense fallback={null}>
-        {/* Repost Modal */}
         {isModalOpen && (
           <RepostModal
             post={isModalOpen}
@@ -376,23 +378,54 @@ const Feed: React.FC = () => {
             onSubmit={handleRepostFromModal}
           />
         )}
-
-        
-        {lightbox && (
+        {lightbox && lightbox.post && (
           <MediaLightbox
+            post={lightbox.post}
             media={lightbox.media}
             initialIndex={lightbox.index}
             onClose={() => setLightbox(null)}
           />
         )}
-
         {repostModalPost && (
           <RepostDialog
             onClose={() => setRepostModalPost(null)}
             reposts={repostList}
             loading={repostLoading}
+            originalPost={repostModalPost}
+            timeSince={timeSince}
           />
         )}
+        {repostModalPost && (
+        <RepostDialog
+          onClose={() => setRepostModalPost(null)}
+          reposts={repostList}
+          loading={repostLoading}
+          originalPost={repostModalPost}
+          timeSince={timeSince}
+          postItemProps={{
+            isLiked: likedPosts.has(repostModalPost.id),
+            isReposted: repostedPosts.has(repostModalPost.id),
+            isCommentSectionOpen: activeCommentPost === repostModalPost.id,
+            commentText: commentTextMap[repostModalPost.id] || "",
+            comments: commentsMap[repostModalPost.id] || [],
+            showEmojiPicker: showEmojiPickerFor === repostModalPost.id,
+            activeLikesBoxId: activeLikesBox,
+            handleLike,
+            handleShowComments,
+            handleCommentChange,
+            handleCommentSubmit,
+            handleRepost,
+            handleShowReposts,
+            setLightbox,
+            setActiveLikesBox,
+            setShowEmojiPickerFor,
+            setReposting,
+            setIsModalOpen,
+            hideRepostButton: true, // keep the internal repost button hidden
+          }}
+        />
+      )}
+
       </Suspense>
     </>
   );

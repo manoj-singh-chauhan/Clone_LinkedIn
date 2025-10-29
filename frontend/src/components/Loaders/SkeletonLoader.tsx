@@ -24,9 +24,9 @@ const SkeletonItem = ({
     className={`bg-gray-200 relative overflow-hidden ${className} ${height} ${width} ${rounded}`}
   >
     <div
-      className="absolute inset-0 transform -translate-x-full 
-                 bg-gradient-to-r from-transparent via-white/50 to-transparent 
-                 animate-shimmer"
+        className="absolute inset-0 transform -translate-x-full 
+                  bg-gradient-to-r from-transparent via-[#0A66C2]/60 to-transparent 
+                  animate-shimmer"
     ></div>
   </div>
 );

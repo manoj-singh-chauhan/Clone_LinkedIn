@@ -9,3 +9,11 @@ declare global {
       | Express.Multer.File[];
   }
 }
+
+// import { Request } from "express";
+
+// declare global {
+//   interface AuthenticatedRequest extends Request {
+//     userId?: number;
+//   }
+// }

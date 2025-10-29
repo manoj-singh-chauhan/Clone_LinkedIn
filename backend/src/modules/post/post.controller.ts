@@ -11,6 +11,7 @@ import "multer";
 import { getPostLikesService } from "./post.service";
 import { getPostCommentsService } from "./post.service";
 import { getPostRepostsService } from "./post.service";
+import logger from "../../utils/logger";
 
 //CREATE POST
 export const createPost = async (req: AuthenticatedRequest, res: Response) => {
@@ -19,25 +20,18 @@ export const createPost = async (req: AuthenticatedRequest, res: Response) => {
     const userId = req.userId;
     if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
-    const files: Express.Multer.File[] = Array.isArray(req.files)
-      ? req.files
-      : Object.values(req.files || {}).flat();
+    const newPost = await PostService.createPost(validatedBody, userId);
 
-    const newPost = await PostService.createPost(validatedBody, userId, files);
-    console.log(newPost);
+    logger.info(newPost);
+
     return res.status(201).json({ message: "Post created", post: newPost });
   } catch (err: any) {
     if (err.errors) {
-      return res
-        .status(400)
-        .json({ message: "Validation failed", errors: err.errors });
+      return res.status(400).json({ message: "Validation failed", errors: err.errors });
     }
-    return res
-      .status(err.statusCode || 500)
-      .json({ message: err.message || "Failed to create post" });
+    return res.status(err.statusCode || 500).json({ message: err.message || "Failed to create post" });
   }
 };
-
 // FETCH POSTS
 export const fetchPosts = async (req: AuthenticatedRequest, res: Response) => {
   try {
@@ -187,10 +181,6 @@ export const getPostRepostsHandler = async (
   res: Response
 ) => {
   const postId = Number(req.params.id);
-  if (isNaN(postId)) {
-    return res.status(400).json({ message: "Invalid post ID" });
-  }
-
   try {
     const reposts = await getPostRepostsService(postId);
     res.status(200).json({

@@ -1,12 +1,5 @@
-import React, {
-  memo,
-  //  useState
-} from "react";
-import {
-  Post as PostType,
-  //  PostRepostUser
-} from "../../api/Post";
-
+import React, { memo, useCallback, useState } from "react";
+import { Post as PostType } from "../../api/Post";
 import {
   AiOutlineLike,
   AiOutlineComment,
@@ -14,15 +7,10 @@ import {
 } from "react-icons/ai";
 import { MdAccountCircle } from "react-icons/md";
 import { FaRegFileAlt } from "react-icons/fa";
-import { IoIosSend } from "react-icons/io";
 import { BiCommentDetail } from "react-icons/bi";
-import EmojiPicker from "emoji-picker-react";
+import EmojiPicker, { EmojiClickData } from "emoji-picker-react";
 import { BsEmojiSmile } from "react-icons/bs";
-
-// const RepostModal = React.lazy(() => import("./RepostModal"));
-// const MediaLightbox = React.lazy(() => import("./MediaLightbox"));
-const ReactionsBox = React.lazy(() => import("./ReactionsBox"));
-// const RepostDialog = React.lazy(() => import("./RepostDialog"));
+import ReactionsBox from "./ReactionsBox";
 
 export interface RepostingPost {
   post: PostType;
@@ -56,26 +44,28 @@ interface PostItemProps {
   showEmojiPicker: boolean;
   isRepostDropdownOpen: boolean;
   activeLikesBoxId: number | null;
-
   timeSince: (dateString: string) => string;
   handleLike: (postId: number) => void;
   handleShowComments: (postId: number) => Promise<void>;
   handleCommentChange: (postId: number, text: string) => void;
   handleCommentSubmit: (postId: number) => Promise<void>;
-  handleRepost: (postId: number, comment?: string) => Promise<void>; // Direct repost
-
+  handleRepost: (postId: number, comment?: string) => Promise<void>;
   setLightbox: React.Dispatch<
-    React.SetStateAction<{ media: MediaItem[]; index: number } | null>
+    React.SetStateAction<{
+      media: MediaItem[];
+      index: number;
+      post: PostType;
+    } | null>
   >;
   setActiveLikesBox: React.Dispatch<React.SetStateAction<number | null>>;
   setShowEmojiPickerFor: React.Dispatch<React.SetStateAction<number | null>>;
   setReposting: React.Dispatch<React.SetStateAction<RepostingPost | null>>;
   setIsModalOpen: React.Dispatch<React.SetStateAction<PostType | null>>;
   handleShowReposts: (post: PostType) => Promise<void>;
-
-  // Infinite Scroll Ref
   isLastPost: boolean;
-  lastPostRef: ((node: HTMLDivElement) => (() => void) | undefined) | null;
+  hideRepostButton?: boolean;
+  lastPostRef?: (node: HTMLDivElement | null) => void;
+  disableRepostCountClick?: boolean;
 }
 
 const PostItem: React.FC<PostItemProps> = memo(
@@ -103,18 +93,29 @@ const PostItem: React.FC<PostItemProps> = memo(
     handleShowReposts,
     isLastPost,
     lastPostRef,
+    hideRepostButton,
+    disableRepostCountClick,
   }) => {
     const authorName = post.author?.profile?.name || "Unknown";
     const postDate = post.createdAt ? timeSince(post.createdAt) : "";
     const media = post.media || [];
 
+    const handleEmojiClick = useCallback(
+      (emojiData: EmojiClickData) => {
+        handleCommentChange(post.id, commentText + emojiData.emoji);
+      },
+      [commentText, handleCommentChange, post.id]
+    );
+
+    const [isExpanded, setIsExpanded] = useState(false);
+
     return (
       <div
         ref={isLastPost ? lastPostRef : null}
-        className="bg-white border border-gray-200 rounded-lg shadow-sm p-4"
+        className="bg-white border border-gray-200 rounded-sm shadow-sm"
       >
-        {/* owner */}
-        <div className="flex items-start gap-3 mb-3">
+        {/* Post Header */}
+        <div className="flex items-start gap-3 mb-3 p-2">
           <MdAccountCircle className="w-10 h-10 text-gray-500 rounded-full flex-shrink-0" />
           <div>
             <p className="font-semibold text-gray-800">{authorName}</p>
@@ -122,22 +123,83 @@ const PostItem: React.FC<PostItemProps> = memo(
           </div>
         </div>
 
-        {/* Content */}
-        {post.content && (
-          <div className="text-gray-800 whitespace-pre-wrap break-words leading-relaxed mb-4 text-base">
+        {/* {post.content && (
+          // <div className="text-gray-800 whitespace-pre-wrap break-words leading-relaxed mb-4 text-base">
+          <div className="text-gray-800 whitespace-pre-wrap break-words leading-relaxed mb-4 text-sm">
+
             {post.content}
           </div>
-        )}
+        )} */}
 
-        {/* Media */}
-        {media.length > 0 && (
-          <PostMediaGrid
-            media={media}
-            onClick={(index) => setLightbox({ media, index })}
-          />
-        )}
+        {/* {post.content && (() => {
+          const MAX_LENGTH = 100; // adjust length as needed
+          const isLong = post.content.length > MAX_LENGTH;
+          const displayText =
+            isExpanded || !isLong
+              ? post.content
+              : post.content.slice(0, MAX_LENGTH) + "...";
 
-        <div className="flex justify-between items-center text-sm text-gray-600 border-t border-gray-100 pt-3 mt-3 relative">
+          return (
+            <div className="text-gray-800 whitespace-pre-wrap break-words leading-relaxed mb-4 text-base px-2">
+              {displayText}
+              {isLong && (
+                <button
+                  onClick={() => setIsExpanded(!isExpanded)}
+                  className="text-blue-600 font-semibold ml-1 hover:underline"
+                >
+                  {isExpanded ? "less" : "more"}
+                </button>
+              )}
+            </div>
+          );
+        })()} */}
+
+        {post.content &&
+          (() => {
+            const MAX_VISIBLE_CHARS = 200;
+            const MAX_NEWLINES = 4; // limit max visible lines
+
+            // Split content into lines and limit lines first
+            const lines = post.content.split("\n");
+            const visibleLines = lines.slice(0, MAX_NEWLINES);
+            const visibleText = visibleLines.join("\n");
+
+            // Then limit characters
+            const trimmedText =
+              visibleText.length > MAX_VISIBLE_CHARS
+                ? visibleText.slice(0, MAX_VISIBLE_CHARS) + "..."
+                : visibleText;
+
+            const shouldTruncate =
+              post.content.length > MAX_VISIBLE_CHARS ||
+              lines.length > MAX_NEWLINES;
+
+            const displayText = isExpanded ? post.content : trimmedText;
+
+            return (
+              <div className="text-gray-800 whitespace-pre-wrap break-words leading-relaxed mb-4 text-base px-2">
+                {displayText}
+                {shouldTruncate && (
+                  <button
+                    onClick={() => setIsExpanded(!isExpanded)}
+                    className="text-blue-600 font-semibold ml-1 hover:underline"
+                  >
+                    {isExpanded ? "less" : "more"}
+                  </button>
+                )}
+              </div>
+            );
+          })()}
+
+        {/* Media Section */}
+        {/* <div className="-mx-1"> */}
+        <PostMediaGrid
+          media={media}
+          onClick={(index) => setLightbox({ media, index, post })}
+        />
+        {/* </div> */}
+
+        <div className="flex justify-between items-center text-sm text-gray-600 border-t border-gray-100 pt-3 mt-3 px-2 relative">
           <span
             className="cursor-pointer hover:text-blue-600 relative"
             onClick={() =>
@@ -153,21 +215,33 @@ const PostItem: React.FC<PostItemProps> = memo(
             )}
           </span>
 
-          <span
-            className="cursor-pointer hover:text-blue-600"
-            onClick={() => handleShowComments(post.id)}
-          >
-            <span className="font-semibold">{post.commentCount}</span> Comments
-          </span>
+          <div className="flex gap-4">
+            <span
+              className="cursor-pointer hover:text-blue-600"
+              onClick={() => handleShowComments(post.id)}
+            >
+              <span className="font-semibold">{post.commentCount}</span>{" "}
+              Comments
+            </span>
 
-          <span
-            className="cursor-pointer hover:text-blue-600"
-            onClick={() => handleShowReposts(post)}
-          >
-            <span className="font-semibold">{post.repostCount}</span> Reposts
-          </span>
+            <span
+              className={
+                disableRepostCountClick
+                  ? "text-gray-600"
+                  : "cursor-pointer hover:text-blue-600"
+              }
+              onClick={
+                disableRepostCountClick
+                  ? undefined
+                  : () => handleShowReposts(post)
+              }
+            >
+              <span className="font-semibold">{post.repostCount}</span> Reposts
+            </span>
+          </div>
         </div>
 
+        {/* Action Buttons */}
         <div className="flex justify-around text-gray-600 mt-2 border-t border-gray-100 pt-2">
           <button
             onClick={() => handleLike(post.id)}
@@ -187,71 +261,68 @@ const PostItem: React.FC<PostItemProps> = memo(
             <span className="hidden sm:inline">Comment</span>
           </button>
 
-          <div className="relative flex flex-col items-center gap-1">
-            <button
-              onClick={() =>
-                setReposting(
-                  isRepostDropdownOpen ? null : { post, openDropdown: true }
-                )
-              }
-              className={`flex items-center gap-1 p-2 rounded-full hover:bg-gray-100 ${
-                isReposted ? "text-green-600" : "text-gray-600"
-              }`}
-            >
-              <AiOutlineRetweet size={20} />
-              <span className="hidden sm:inline">Repost</span>
-            </button>
-
-            {isRepostDropdownOpen && (
-              <div
-                className="absolute top-10 right-0 bg-white border border-gray-200 rounded-xl shadow-lg w-64 z-20 overflow-hidden"
-                onMouseLeave={() => setReposting(null)}
+          {!hideRepostButton && (
+            <div className="relative flex flex-col items-center gap-1">
+              <button
+                onClick={() =>
+                  setReposting(
+                    isRepostDropdownOpen ? null : { post, openDropdown: true }
+                  )
+                }
+                className={`flex items-center gap-1 p-2 rounded-full hover:bg-gray-100 ${
+                  isReposted ? "text-green-600" : "text-gray-600"
+                }`}
               >
-                <button
-                  onClick={() => {
-                    setIsModalOpen(post);
-                    setReposting(null);
-                  }}
-                  className="flex flex-col items-start w-full px-4 py-3 text-left hover:bg-gray-50 transition-colors"
-                >
-                  <div className="flex items-center gap-3">
-                    <BiCommentDetail className="text-gray-600 text-lg" />
-                    <span className="text-sm font-semibold text-gray-800">
-                      Repost with your thoughts
-                    </span>
-                  </div>
-                  <p className="text-xs text-gray-500 pl-7">
-                    Create a new post with this post attached
-                  </p>
-                </button>
+                <AiOutlineRetweet size={20} />
+                <span className="hidden sm:inline">Repost</span>
+              </button>
 
-                <button
-                  onClick={() => handleRepost(post.id)}
-                  className="flex flex-col items-start w-full px-4 py-3 text-left hover:bg-gray-50 transition-colors border-t border-gray-100"
+              {isRepostDropdownOpen && (
+                <div
+                  className="absolute top-10 right-0 bg-white border border-gray-200 rounded-xl shadow-lg w-64 z-20 overflow-hidden"
+                  onMouseLeave={() => setReposting(null)}
                 >
-                  <div className="flex items-center gap-3">
-                    <AiOutlineRetweet className="text-gray-600 text-lg" />
-                    <span className="text-sm font-semibold text-gray-800">
-                      Repost
-                    </span>
-                  </div>
-                  <p className="text-xs text-gray-500 pl-7">
-                    Instantly share this post to your feed
-                  </p>
-                </button>
-              </div>
-            )}
-          </div>
+                  <button
+                    onClick={() => {
+                      setIsModalOpen(post);
+                      setReposting(null);
+                    }}
+                    className="flex flex-col items-start w-full px-4 py-3 text-left hover:bg-gray-50 transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      <BiCommentDetail className="text-gray-600 text-lg" />
+                      <span className="text-sm font-semibold text-gray-800">
+                        Repost with your thoughts
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-500 pl-7">
+                      Create a new post with this post attached
+                    </p>
+                  </button>
 
-          <button className="flex items-center gap-1 p-2 rounded-full hover:bg-gray-100">
-            <IoIosSend size={20} />
-            <span className="hidden sm:inline">Send</span>
-          </button>
+                  <button
+                    onClick={() => handleRepost(post.id)}
+                    className="flex flex-col items-start w-full px-4 py-3 text-left hover:bg-gray-50 transition-colors border-t border-gray-100"
+                  >
+                    <div className="flex items-center gap-3">
+                      <AiOutlineRetweet className="text-gray-600 text-lg" />
+                      <span className="text-sm font-semibold text-gray-800">
+                        Repost
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-500 pl-7">
+                      Instantly share this post to your feed
+                    </p>
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Comments Section */}
         {isCommentSectionOpen && (
-          <div className="mt-4 space-y-3">
+          <div className="mt-4 space-y-3 px-2">
             <div className="flex gap-2 items-start">
               <MdAccountCircle className="w-10 h-10 text-gray-400 rounded-full flex-shrink-0" />
               <div className="flex-1 flex flex-col">
@@ -291,9 +362,7 @@ const PostItem: React.FC<PostItemProps> = memo(
             {showEmojiPicker && (
               <div className="absolute z-50 bottom-12 left-0">
                 <EmojiPicker
-                  onEmojiClick={(emojiData) =>
-                    handleCommentChange(post.id, commentText + emojiData.emoji)
-                  }
+                  onEmojiClick={handleEmojiClick}
                   width={300}
                   height={350}
                 />
@@ -309,7 +378,7 @@ const PostItem: React.FC<PostItemProps> = memo(
                   <MdAccountCircle className="w-8 h-8 text-gray-400 rounded-full flex-shrink-0" />
                   <div className="bg-gray-100 rounded-xl px-3 py-2 flex-1">
                     <p className="text-sm font-semibold text-gray-800">
-                      {comment.user?.name ?? "Unknown"}
+                      {comment.user?.name}
                     </p>
                     <p className="text-sm text-gray-700 mt-1">
                       {comment.content}
@@ -328,6 +397,8 @@ const PostItem: React.FC<PostItemProps> = memo(
   }
 );
 
+export default PostItem;
+
 export const PostMediaGrid: React.FC<{
   media: MediaItem[];
   onClick?: (index: number) => void;
@@ -335,7 +406,6 @@ export const PostMediaGrid: React.FC<{
   const count = media.length;
   if (count === 0) return null;
 
-  // Single document case
   if (count === 1 && media[0].type === "document") {
     const doc = media[0];
     const fileName = doc.url.split("/").pop() || "Document File";
@@ -355,121 +425,108 @@ export const PostMediaGrid: React.FC<{
           <p className="font-semibold text-gray-800 truncate">{fileName}</p>
           <p className="text-sm text-gray-500 mt-1">{fileExtension}</p>
         </div>
-        <FaRegFileAlt className="text-blue-600 text-xl ml-4 sm:hidden" />
       </a>
     );
   }
 
-  const MediaCard: React.FC<{
-    media: MediaItem;
-    onClick?: () => void;
-    maxHeight: string;
-  }> = ({ media, onClick, maxHeight }) => (
-    <div
-      className={`relative cursor-pointer ${maxHeight} rounded`}
-      onClick={onClick}
-    >
-      {media.type === "video" ? (
-        <video
-          src={media.url}
-          controls
-          className="w-full h-full object-cover rounded-sm"
-        />
-      ) : (
-        <img
-          src={media.url}
-          className="w-full h-full object-cover rounded-sm"
-          alt=""
-        />
-      )}
-    </div>
-  );
-
-  if (count === 1) {
-    return (
-      <div className="mb-4">
-        <MediaCard
-          media={media[0]}
-          onClick={() => onClick?.(0)}
-          maxHeight="max-h-96"
-        />
-      </div>
-    );
-  }
-
-  if (count === 2) {
-    return (
-      <div className="mb-4 grid grid-cols-2 gap-1">
-        {media.map((m, i) => (
-          <MediaCard
-            key={i}
-            media={m}
-            onClick={() => onClick?.(i)}
-            maxHeight="h-48"
-          />
-        ))}
-      </div>
-    );
-  }
-
-  
   if (count === 3) {
     return (
-      <div className="mb-4 grid gap-1">
-        <MediaCard
-          media={media[0]}
+      <div className="mb-4 grid grid-cols-3 gap-0.5 h-[24rem] sm:h-[22rem]">
+        <div
+          className="col-span-2 row-span-2 relative overflow-hidden rounded-sm cursor-pointer"
           onClick={() => onClick?.(0)}
-          maxHeight="max-h-72"
-        />
-        <div className="grid grid-cols-2 gap-1 mt-.5">
-          {media.slice(1, 3).map((m, i) => (
-            <MediaCard
-              key={i + 1}
-              media={m}
-              onClick={() => onClick?.(i + 1)}
-              maxHeight="h-48"
+        >
+          {media[0].type === "video" ? (
+            <video
+              src={media[0].url}
+              controls
+              className="w-full h-full object-cover"
             />
-          ))}
+          ) : (
+            <img
+              src={media[0].url}
+              alt="media-0"
+              className="w-full h-full object-cover"
+              loading="lazy"
+            />
+          )}
         </div>
-      </div>
-    );
-  }
-
-  if (count === 4) {
-    return (
-      <div className="mb-4 grid grid-cols-2 gap-1">
-        {media.map((m, i) => (
-          <MediaCard
+        {media.slice(1, 3).map((m, i) => (
+          <div
             key={i}
-            media={m}
-            onClick={() => onClick?.(i)}
-            maxHeight="h-48"
-          />
+            className="relative overflow-hidden rounded-sm cursor-pointer"
+            onClick={() => onClick?.(i + 1)}
+          >
+            {m.type === "video" ? (
+              <video
+                src={m.url}
+                controls
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <img
+                src={m.url}
+                alt={`media-${i + 1}`}
+                className="w-full h-full object-cover"
+                loading="lazy"
+              />
+            )}
+          </div>
         ))}
       </div>
     );
   }
 
+  const grid =
+    count === 1
+      ? "grid-cols-1 h-96"
+      : count === 2
+      ? "grid-cols-2 h-64"
+      : "grid-cols-2 grid-rows-2 h-96";
+
   return (
-    <div className="mb-4 grid gap-1 relative">
-      <div className="grid grid-cols-2 gap-1">
-        {media.slice(0, 4).map((m, i) => (
-          <div key={i} className="relative">
-            <MediaCard
-              media={m}
-              onClick={() => onClick?.(i)}
-              maxHeight="h-48"
-            />
-            {i === 3 && count > 4 && (
-              <div className="absolute inset-0 bg-black/50 flex items-center justify-center text-white text-2xl font-bold rounded">
+    <div className={`mb-4 grid ${grid} gap-[2px] overflow-hidden`}>
+      {/* <div className={`mb-4 grid ${grid} gap-0`}> */}
+
+      {media
+        .filter((m) => m.type !== "document")
+        .slice(0, 4)
+        .map((m, i) => (
+          <div
+            key={i}
+            className="relative overflow-hidden rounded-sm cursor-pointer"
+            onClick={() => onClick?.(i)}
+          >
+            {m.type === "video" ? (
+              // <video
+              //   src={m.url}
+              //   controls
+              //   className="w-full h-full object-cover"
+              // />
+              <video
+                src={m.url}
+                controls
+                className="w-full h-full object-cover block"
+              />
+            ) : (
+              // <img
+              //   src={m.url}
+              //   alt={`media-${i}`}
+              //   className="w-full h-full object-cover"
+              // />
+              <img
+                src={m.url}
+                alt={`media-${i}`}
+                className="w-full h-full object-cover block"
+              />
+            )}
+            {count > 4 && i === 3 && (
+              <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center text-white text-2xl font-semibold">
                 +{count - 4}
               </div>
             )}
           </div>
         ))}
-      </div>
     </div>
   );
 };
-
-export default PostItem;

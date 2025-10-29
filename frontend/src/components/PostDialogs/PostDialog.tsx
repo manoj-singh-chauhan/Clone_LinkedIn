@@ -23,8 +23,9 @@ import PostSettingsDialog from "./PostSettingsDialog";
 import PostTextarea from "./PostTextarea";
 import { BsImage } from "react-icons/bs";
 import PostEmojiPicker from "./PostEmojiPicker";
-
-// const EmojiPicker = React.lazy(() => import("emoji-picker-react"));
+import { useUpload } from "../../context/UploadContext";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "react-hot-toast";
 
 type DialogStep = "compose" | "media_editor" | "document_editor";
 
@@ -38,28 +39,37 @@ interface MediaFileWithPreview {
   previewUrl: string;
 }
 
+type CreatePostPayload = {
+  content: string | null;
+  hashtags: string;
+  postType: "public" | "connection-only";
+  mediaFiles: File[];
+  documents: File[];
+};
+
 const PostDialog = ({ close, initialFiles = [] }: DialogProps) => {
   const { user } = useAuth();
   const email = user?.email;
   // console.log("render");
 
-  // const [hashtags, setHashtags] = useState<string[]>([]);
   const [step, setStep] = useState<DialogStep>("compose");
   const [mediaFiles, setMediaFiles] = useState<MediaFileWithPreview[]>([]);
   const [documents, setDocuments] = useState<File[]>([]);
   const [error, setError] = useState<string | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [isPosting, setIsPosting] = useState(false);
-  // const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [visibility, setVisibility] = useState<"public" | "connection-only">(
-    "public"
-  );
-
+  const [visibility, setVisibility] = useState<"public" | "connection-only">("public");
+  // const { setProgress, setUploading } = useUpload();
+  // const { setProgress, setUploading, setCancelUpload } = useUpload();
+  const { setProgress, setUploading, setCancelUpload, canUpload } = useUpload();
+  const queryClient = useQueryClient();
   const [tempMediaFiles, setTempMediaFiles] = useState<MediaFileWithPreview[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const hashtagsRef = useRef<string[]>([]);
 
+  
   const handleInitialFiles = useCallback((files: File[]) => {
     const media = files
       .filter((f) => f.type.startsWith("image") || f.type.startsWith("video"))
@@ -82,34 +92,19 @@ const PostDialog = ({ close, initialFiles = [] }: DialogProps) => {
     if (initialFiles.length > 0) handleInitialFiles(initialFiles);
   }, [initialFiles, handleInitialFiles]);
 
-  // useEffect(() => {
-  //   return () => mediaFiles.forEach((m) => URL.revokeObjectURL(m.previewUrl));
-  // }, []);
-  //mediaFiles
-
   const mediaFilesRef = useRef<MediaFileWithPreview[]>([]);
 
-// Keep the ref updated whenever mediaFiles changes
-useEffect(() => {
-  mediaFilesRef.current = mediaFiles;
-}, [mediaFiles]);
+  // Keep the ref updated whenever mediaFiles changes
+  useEffect(() => {
+    mediaFilesRef.current = mediaFiles;
+  }, [mediaFiles]);
 
-// Cleanup URLs only once on unmount
-useEffect(() => {
-  return () => {
-    mediaFilesRef.current.forEach((m) => URL.revokeObjectURL(m.previewUrl));
-  };
-}, []);
-
-
-
-  // const extractHashtags = useCallback(() => {
-  //   const content = textareaRef.current?.value || "";
-  //   const matches = Array.from(
-  //     new Set(content.match(/#[\w]+/g)?.map((tag) => tag.toLowerCase()))
-  //   );
-  //   setHashtags(matches || []);
-  // }, []);
+  // Cleanup URLs only once on unmount
+  useEffect(() => {
+    return () => {
+      mediaFilesRef.current.forEach((m) => URL.revokeObjectURL(m.previewUrl));
+    };
+  }, []);
 
   const extractHashtags = useCallback(() => {
     const content = textareaRef.current?.value || "";
@@ -119,72 +114,32 @@ useEffect(() => {
     hashtagsRef.current = matches || [];
   }, []);
 
-  // const handleFileChange = useCallback(
-  //   (e: React.ChangeEvent<HTMLInputElement>, type: "media" | "document") => {
-  //     const files = Array.from(e.target.files || []);
-  //     if (!files.length) return;
-
-  //     const MAX_SIZE_MB = 100;
-  //     const tooLarge = files.find((f) => f.size > MAX_SIZE_MB * 1024 * 1024);
-  //     if (tooLarge)
-  //       return setError(`File "${tooLarge.name}" exceeds ${MAX_SIZE_MB} MB.`);
-
-  //     if (type === "media") {
-  //       const newMedia = files.map((f) => ({
-  //         file: f,
-  //         previewUrl: URL.createObjectURL(f),
-  //       }));
-  //       setMediaFiles((prev) => [...prev, ...newMedia]);
-  //       setStep("media_editor");
-  //     } else {
-  //       setDocuments([files[0]]);
-  //       setStep("document_editor");
-  //     }
-
-  //     setError(null);
-  //   },
-  //   []
-  // );
-
   const handleFileChange = useCallback(
-  (e: React.ChangeEvent<HTMLInputElement>, type: "media" | "document") => {
-    const files = Array.from(e.target.files || []);
-    if (!files.length) return;
+    (e: React.ChangeEvent<HTMLInputElement>, type: "media" | "document") => {
+      const files = Array.from(e.target.files || []);
+      if (!files.length) return;
 
-    const MAX_SIZE_MB = 100;
-    const tooLarge = files.find((f) => f.size > MAX_SIZE_MB * 1024 * 1024);
-    if (tooLarge)
-      return setError(`File "${tooLarge.name}" exceeds ${MAX_SIZE_MB} MB.`);
+      const MAX_SIZE_MB = 100;
+      const tooLarge = files.find((f) => f.size > MAX_SIZE_MB * 1024 * 1024);
+      if (tooLarge)
+        return setError(`File "${tooLarge.name}" exceeds ${MAX_SIZE_MB} MB.`);
 
-    // if (type === "media") {
-    //   const newMedia = files.map((f) => ({
-    //     file: f,
-    //     previewUrl: URL.createObjectURL(f),
-    //   }));
-    //   setTempMediaFiles(newMedia);
-    //   setStep("media_editor");
-    // } 
-    
-    if (type === "media") {
-      const newMedia = files.map((f) => ({
-        file: f,
-        previewUrl: URL.createObjectURL(f),
-      }));
-      setTempMediaFiles((prev) => [...prev, ...newMedia]); // append new media
-      setStep("media_editor");
-    }
+      if (type === "media") {
+        const newMedia = files.map((f) => ({
+          file: f,
+          previewUrl: URL.createObjectURL(f),
+        }));
+        setTempMediaFiles((prev) => [...prev, ...newMedia]); // append new media
+        setStep("media_editor");
+      } else {
+        setDocuments([files[0]]);
+        setStep("document_editor");
+      }
 
-
-    else {
-      setDocuments([files[0]]);
-      setStep("document_editor");
-    }
-
-    setError(null);
-  },
-  []
-);
-
+      setError(null);
+    },
+    []
+  );
 
   const triggerFilePicker = useCallback(
     (accept: string, type: "media" | "document", multiple = false) => {
@@ -213,92 +168,106 @@ useEffect(() => {
     []
   );
 
-  // const addEmoji = useCallback(
-  //   (emoji: string) => {
-  //     const textarea = textareaRef.current;
-  //     if (!textarea) return;
-  //     const start = textarea.selectionStart;
-  //     const end = textarea.selectionEnd;
-  //     textarea.value =
-  //       textarea.value.slice(0, start) + emoji + textarea.value.slice(end);
-  //     textarea.selectionStart = textarea.selectionEnd = start + emoji.length;
-  //     textarea.focus();
-  //     extractHashtags();
-  //   },
-  //   [extractHashtags]
+  const createPostMutation = useMutation<
+    unknown,
+    unknown,
+    CreatePostPayload
+  >({
+    mutationFn: async (formData: CreatePostPayload) => {
+      return await createPost(
+        {
+          content: formData.content,
+          hashtags: formData.hashtags,
+          postType: formData.postType,
+        },
+        [...formData.mediaFiles, ...formData.documents],
+        (progress) => setProgress(progress),
+        setCancelUpload
+      );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["posts"] });
+      setUploading(false);
+      // console.log("Post created successfully");
+    },
+    onError: (error) => {
+      console.error("Failed to create post:", error);
+       toast.error(" Failed to create post. Please try again.");
+      setUploading(false);
+    },
+  });
 
-  // );
+  // const handleSubmit = async () => {
+  //   if (!canUpload()) {
+  //   // console.log("Upload already in progress — skipping new upload");
+  //   alert("Another upload is in progress. Please wait."); 
+  //   return;
+  // }
 
-  // const handleEmojiClick = useCallback(
-  //   (emojiData: { emoji: string }) => {
-  //     addEmoji(emojiData.emoji);
-  //   },
-  //   [addEmoji]
-  // );
-
-  // const emojiPickerElement = useMemo(() => {
-  //   if (!showEmojiPicker) return null;
-
-  //   return (
-  //     <div className="absolute bottom-16 right-4 z-10">
-  //       {/* <Suspense fallback={<div>Loading emojis...</div>}> */}
-  //       <EmojiPicker onEmojiClick={handleEmojiClick} />
-  //       {/* </Suspense> */}
-  //     </div>
-  //   );
-  // }, [showEmojiPicker, handleEmojiClick]);
-
-  // const handleSubmit = useCallback(async () => {
-  //   const content = textareaRef.current?.value || "";
   //   extractHashtags();
+  //   const hashtags = hashtagsRef.current;
+  //   const content = textareaRef.current?.value || "";
 
   //   if (!content.trim() && mediaFiles.length === 0 && documents.length === 0)
   //     return;
 
+  //   close();
+  //   setUploading(true);
+  //   setProgress(0);
+
   //   try {
-  //     setIsPosting(true);
-  //     setError(null);
-  //     const allFiles = [...mediaFiles.map((m) => m.file), ...documents];
+  //     // await createPost(
+  //     //   {
+  //     //     content: content.trim() || null,
+  //     //     hashtags: hashtags.join(","),
+  //     //     postType: visibility,
+  //     //   },
+  //     //   [...mediaFiles.map((m) => m.file), ...documents],
+  //     //   (progress) => setProgress(progress)
+  //     // );
   //     await createPost(
   //       {
   //         content: content.trim() || null,
   //         hashtags: hashtags.join(","),
   //         postType: visibility,
   //       },
-  //       allFiles
+  //       [...mediaFiles.map((m) => m.file), ...documents],
+  //       (progress) => setProgress(progress),
+  //       setCancelUpload 
   //     );
-  //     close();
+
   //   } catch (err) {
-  //     setError(err instanceof Error ? err.message : "Failed to create post");
+  //     console.error(err);
   //   } finally {
-  //     setIsPosting(false);
+  //     setUploading(false);
   //   }
-  // }, [mediaFiles, documents, hashtags, visibility, close, extractHashtags]);
+  // };
 
   const handleSubmit = async () => {
+    if (!canUpload()) {
+      alert("Another upload is in progress. Please wait.");
+      return;
+    }
+
     extractHashtags();
-    const hashtags = hashtagsRef.current; // use them here
+    const hashtags = hashtagsRef.current;
     const content = textareaRef.current?.value || "";
 
     if (!content.trim() && mediaFiles.length === 0 && documents.length === 0)
       return;
 
-    setIsPosting(true);
-    try {
-      await createPost(
-        {
-          content: content.trim() || null,
-          hashtags: hashtags.join(","),
-          postType: visibility,
-        },
-        [...mediaFiles.map((m) => m.file), ...documents]
-      );
-      close();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create post");
-    } finally {
-      setIsPosting(false);
-    }
+    close();
+    setUploading(true);
+    setProgress(0);
+
+    
+    createPostMutation.mutate({
+      content: content.trim() || null,
+      hashtags: hashtags.join(","),
+      postType: visibility,
+      mediaFiles: mediaFiles.map((m) => m.file),
+      documents,
+    });
   };
 
   const attachments = useMemo(
@@ -540,46 +509,26 @@ useEffect(() => {
             </>
           )}
 
-          {/* {step === "media_editor" && (
+          {step === "media_editor" && (
             <MediaAttachmentEditor
-              files={mediaFiles.map((m) => m.file)}
+              files={tempMediaFiles.map((m) => m.file)}
               onClose={() => setStep("compose")}
               onUpdate={(updatedFiles) => {
-                mediaFiles.forEach((m) => URL.revokeObjectURL(m.previewUrl));
                 const newMedia = updatedFiles.map((f) => ({
                   file: f,
                   previewUrl: URL.createObjectURL(f),
                 }));
-                setMediaFiles(newMedia);
-                // setStep("compose");
+                setTempMediaFiles(newMedia);
+              }}
+              onNext={() => {
+                setMediaFiles(tempMediaFiles);
+                setStep("compose");
               }}
               onAddMore={() =>
                 triggerFilePicker("image/*,video/*", "media", true)
               }
             />
-          )} */}
-
-          {step === "media_editor" && (
-          <MediaAttachmentEditor
-          files={tempMediaFiles.map((m) => m.file)}
-          onClose={() => setStep("compose")}
-          onUpdate={(updatedFiles) => {
-            const newMedia = updatedFiles.map((f) => ({
-              file: f,
-              previewUrl: URL.createObjectURL(f),
-            }));
-            setTempMediaFiles(newMedia);
-          }}
-          onNext={() => {
-            setMediaFiles(tempMediaFiles); 
-            setStep("compose");
-          }}
-          onAddMore={() =>
-            triggerFilePicker("image/*,video/*", "media", true)
-          }
-        />
-        )}
-
+          )}
 
           {step === "document_editor" && (
             <DocumentAttachmentEditor
@@ -612,20 +561,6 @@ useEffect(() => {
                   <span className="hidden sm:inline text-sm">{a.label}</span>
                 </button>
               ))}
-              {/* <button
-                type="button"
-                aria-label="emoji picker"
-                onClick={() => setShowEmojiPicker((p) => !p)}
-                className="p-2 text-gray-500 hover:text-gray-700"
-              >
-                <BsEmojiSmile size={24} />
-              </button> */}
-
-              {/* {showEmojiPicker && (
-                <div className="absolute bottom-16 right-4 z-10">
-                    <EmojiPicker onEmojiClick={(e) => addEmoji(e.emoji)} />
-                </div>
-              )} */}
 
               {/* {emojiPickerElement} */}
 
