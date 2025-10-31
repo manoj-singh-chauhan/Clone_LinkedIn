@@ -45,9 +45,11 @@ const Post = () => {
 
   return (
     <>
-      <div className="bg-white p-3 rounded-md shadow-md mb-4 max-w-2xl mx-auto">
+      <div className="bg-white p-3 rounded-md shadow-md mb-1 max-w-2xl mx-auto">
+      {/* <div className="bg-white p-3 rounded-md shadow-md mb-4 w-80 h-80 mx-auto"> */}
+
         <div className="flex items-center gap-3 mb-3">
-          <MdAccountCircle className="w-12 h-12 text-gray-500" />
+          <MdAccountCircle className="w-10 h-10 text-gray-500" />
 
           <input
             type="text"

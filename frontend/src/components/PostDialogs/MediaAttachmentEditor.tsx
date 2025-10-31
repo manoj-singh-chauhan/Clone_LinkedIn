@@ -317,7 +317,7 @@ const MediaAttachmentEditor = ({
         )}
 
         
-        <div className="flex justify-end items-center gap-3 p-4 border-t border-gray-100 bg-white">
+        <div className="flex justify-end items-center gap-3 p-4 border-t border-gray-400 bg-white">
           <button
             onClick={onClose}
             className="flex items-center px-5 py-1.5 text-gray-700 bg-gray-200 rounded-full hover:bg-gray-300 transition font-semibold"

@@ -59,38 +59,37 @@ const PostDialog = ({ close, initialFiles = [] }: DialogProps) => {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [isPosting, setIsPosting] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [visibility, setVisibility] = useState<"public" | "connection-only">("public");
+  const [visibility, setVisibility] = useState<"public" | "connection-only">(
+    "public"
+  );
   // const { setProgress, setUploading } = useUpload();
   // const { setProgress, setUploading, setCancelUpload } = useUpload();
   const { setProgress, setUploading, setCancelUpload, canUpload } = useUpload();
   const queryClient = useQueryClient();
-  const [tempMediaFiles, setTempMediaFiles] = useState<MediaFileWithPreview[]>([]);
+  const [tempMediaFiles, setTempMediaFiles] = useState<MediaFileWithPreview[]>(
+    []
+  );
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const hashtagsRef = useRef<string[]>([]);
 
-  
-  const handleInitialFiles = useCallback((files: File[]) => {
-    const media = files
-      .filter((f) => f.type.startsWith("image") || f.type.startsWith("video"))
-      .map((f) => ({ file: f, previewUrl: URL.createObjectURL(f) }));
-    const docs = files.filter(
-      (f) => !f.type.startsWith("image") && !f.type.startsWith("video")
-    );
-    setMediaFiles(media);
-    setDocuments(docs);
-    setStep(
-      media.length
-        ? "media_editor"
-        : docs.length
-        ? "document_editor"
-        : "compose"
-    );
-  }, []);
+  // useEffect(() => {
+  //   if (initialFiles.length > 0) handleInitialFiles(initialFiles);
+  // }, [initialFiles, handleInitialFiles]);
 
   useEffect(() => {
-    if (initialFiles.length > 0) handleInitialFiles(initialFiles);
-  }, [initialFiles, handleInitialFiles]);
+    if (initialFiles && initialFiles.length > 0) {
+      const media = initialFiles
+        .filter((f) => f.type.startsWith("image") || f.type.startsWith("video"))
+        .map((f) => ({
+          file: f,
+          previewUrl: URL.createObjectURL(f),
+        }));
+
+      setTempMediaFiles(media);
+      setStep("media_editor");
+    }
+  }, [initialFiles]);
 
   const mediaFilesRef = useRef<MediaFileWithPreview[]>([]);
 
@@ -168,11 +167,7 @@ const PostDialog = ({ close, initialFiles = [] }: DialogProps) => {
     []
   );
 
-  const createPostMutation = useMutation<
-    unknown,
-    unknown,
-    CreatePostPayload
-  >({
+  const createPostMutation = useMutation<unknown, unknown, CreatePostPayload>({
     mutationFn: async (formData: CreatePostPayload) => {
       return await createPost(
         {
@@ -192,7 +187,7 @@ const PostDialog = ({ close, initialFiles = [] }: DialogProps) => {
     },
     onError: (error) => {
       console.error("Failed to create post:", error);
-       toast.error(" Failed to create post. Please try again.");
+      toast.error(" Failed to create post. Please try again.");
       setUploading(false);
     },
   });
@@ -200,7 +195,7 @@ const PostDialog = ({ close, initialFiles = [] }: DialogProps) => {
   // const handleSubmit = async () => {
   //   if (!canUpload()) {
   //   // console.log("Upload already in progress — skipping new upload");
-  //   alert("Another upload is in progress. Please wait."); 
+  //   alert("Another upload is in progress. Please wait.");
   //   return;
   // }
 
@@ -233,7 +228,7 @@ const PostDialog = ({ close, initialFiles = [] }: DialogProps) => {
   //       },
   //       [...mediaFiles.map((m) => m.file), ...documents],
   //       (progress) => setProgress(progress),
-  //       setCancelUpload 
+  //       setCancelUpload
   //     );
 
   //   } catch (err) {
@@ -260,7 +255,6 @@ const PostDialog = ({ close, initialFiles = [] }: DialogProps) => {
     setUploading(true);
     setProgress(0);
 
-    
     createPostMutation.mutate({
       content: content.trim() || null,
       hashtags: hashtags.join(","),
@@ -289,12 +283,12 @@ const PostDialog = ({ close, initialFiles = [] }: DialogProps) => {
       {
         icon: <FaRegCalendarAlt className="w-6 h-6 text-gray-400" />,
         label: "Event",
-        // onClick: () => alert("Event posting not implemented yet."),
+        onClick: () => alert("working on it"),
       },
       {
         icon: <FaPoll className="w-6 h-6 text-gray-400" />,
         label: "Poll",
-        // onClick: () => alert("Event posting not implemented yet."),
+        onClick: () => alert("working on it"),
       },
     ],
     [triggerFilePicker]

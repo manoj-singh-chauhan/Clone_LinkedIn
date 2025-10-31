@@ -14,9 +14,7 @@ import {
   getPostComments,
   getPostReposts,
   Post as PostType,
-  // PostRepostUser,
   RepostWithUser,
-
 } from "../../api/Post";
 import PostItem, {
   RepostingPost,
@@ -27,110 +25,102 @@ import { useAuth } from "../../context/AuthContext";
 import RepostModal from "./RepostModal";
 import MediaLightbox from "./MediaLightbox";
 import RepostDialog from "./RepostDialog";
-// import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
-import { useInfiniteQuery, useQueryClient, InfiniteData } from "@tanstack/react-query";
-
-
-interface CommentFromAPI {
-  commentId?: number;
-  id?: number;
-  content: string;
-  createdAt: string;
-  user?: {
-    id: number;
-    name: string;
-    email?: string;
-  };
-}
+import {
+  useInfiniteQuery,
+  useQueryClient,
+  InfiniteData,
+  useQuery,
+  useMutation,
+} from "@tanstack/react-query";
 
 const Feed: React.FC = () => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
-  const [activeCommentPost, setActiveCommentPost] = useState<number | null>(null);
-  const [commentTextMap, setCommentTextMap] = useState<Record<number, string>>({});
-  const [commentsMap, setCommentsMap] = useState<Record<number, PostCommentUser[]>>({});
+  const [activeCommentPost, setActiveCommentPost] = useState<number | null>(
+    null
+  );
+  const [commentTextMap, setCommentTextMap] = useState<Record<number, string>>(
+    {}
+  );
   const [reposting, setReposting] = useState<RepostingPost | null>(null);
   const [isModalOpen, setIsModalOpen] = useState<PostType | null>(null);
   const [lightbox, setLightbox] = useState<{
     media: MediaItem[];
     index: number;
     post: PostType;
-    // post?: PostType;
   } | null>(null);
-  const [showEmojiPickerFor, setShowEmojiPickerFor] = useState<number | null>(null);
+  const [showEmojiPickerFor, setShowEmojiPickerFor] = useState<number | null>(
+    null
+  );
   const [activeLikesBox, setActiveLikesBox] = useState<number | null>(null);
   const [repostModalPost, setRepostModalPost] = useState<PostType | null>(null);
-  // const [repostList, setRepostList] = useState<PostRepostUser[]>([]);
   const [repostList, setRepostList] = useState<RepostWithUser[]>([]);
   const [repostLoading, setRepostLoading] = useState(false);
   const [likedPosts, setLikedPosts] = useState<Set<number>>(new Set());
   const [repostedPosts, setRepostedPosts] = useState<Set<number>>(new Set());
   const [repostPending, setRepostPending] = useState<Set<number>>(new Set());
   const observerRef = useRef<IntersectionObserver | null>(null);
-  
 
   const limit = 5;
 
   
-  // const {
-  //   data,
-  //   fetchNextPage,
-  //   hasNextPage,
-  //   isFetchingNextPage,
-  //   isLoading,
-  //   isError,
-  // } = useInfiniteQuery<PostType[], Error, PostType[], string[], number>({
-  //   queryKey: ["posts"],
-  //   queryFn: async ({ pageParam = 1 }: { pageParam?: number }) => {
-  //     const res = await fetchAllPosts(pageParam, limit);
-  //     return res;
-  //   },
-  //   getNextPageParam: (lastPage, allPages) =>
-  //     lastPage.length < limit ? undefined : allPages.length + 1,
-  //   initialPageParam: 1,
-  // });
+  const {
+    data,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isLoading,
+    isError,
+  } = useInfiniteQuery<
+    PostType[],
+    Error,
+    InfiniteData<PostType[]>,
+    [string],
+    number
+  >({
+    queryKey: ["posts"],
+    queryFn: async ({ pageParam = 1 }) => {
+      const res = await fetchAllPosts(pageParam, limit);
+      return res;
+    },
+    getNextPageParam: (lastPage, allPages) =>
+      lastPage.length < limit ? undefined : allPages.length + 1,
+    initialPageParam: 1,
+  });
 
-const {
-  data,
-  fetchNextPage,
-  hasNextPage,
-  isFetchingNextPage,
-  isLoading,
-  isError,
-} = useInfiniteQuery<PostType[], Error, InfiniteData<PostType[]>, [string], number>({
-  queryKey: ["posts"],
-  queryFn: async ({ pageParam = 1 }) => {
-    const res = await fetchAllPosts(pageParam, limit);
-    return res;
-  },
-  getNextPageParam: (lastPage, allPages) =>
-    lastPage.length < limit ? undefined : allPages.length + 1,
-  initialPageParam: 1,
-});
-const posts = useMemo(() => data?.pages.flat() || [], [data]);
+  const posts = useMemo(() => data?.pages.flat() || [], [data]);
 
-useEffect(() => {
-  if (posts.length > 0) {
-    setLikedPosts(() => {
-      const newSet = new Set<number>();
-      posts.forEach((p) => {
-        if (p.likedByCurrentUser) newSet.add(p.id);
-      });
-      return newSet;
-    });
-
-    setRepostedPosts(() => {
-      const newSet = new Set<number>();
-      posts.forEach((p) => {
-        if (p.repostedByCurrentUser) newSet.add(p.id);
-      });
-      return newSet;
-    });
-  }
-}, [posts]);
+  const { data: commentsData } = useQuery({
+    queryKey: ["comments", activeCommentPost],
+    queryFn: async () => {
+      if (!activeCommentPost) return [];
+      return await getPostComments(activeCommentPost);
+    },
+    enabled: !!activeCommentPost,
+  });
 
   
+  useEffect(() => {
+    if (posts.length > 0) {
+      setLikedPosts(() => {
+        const newSet = new Set<number>();
+        posts.forEach((p) => {
+          if (p.likedByCurrentUser) newSet.add(p.id);
+        });
+        return newSet;
+      });
+
+      setRepostedPosts(() => {
+        const newSet = new Set<number>();
+        posts.forEach((p) => {
+          if (p.repostedByCurrentUser) newSet.add(p.id);
+        });
+        return newSet;
+      });
+    }
+  }, [posts]);
+
   const lastPostRef = useCallback(
     (node: HTMLDivElement | null) => {
       if (isLoading || isFetchingNextPage) return;
@@ -174,12 +164,8 @@ useEffect(() => {
         queryClient.invalidateQueries({ queryKey: ["posts"] });
         setLikedPosts((prev) => {
           const newSet = new Set(prev);
-          // data.liked ? newSet.add(postId) : newSet.delete(postId);
-          if (data.liked) {
-            newSet.add(postId);
-          } else {
-            newSet.delete(postId);
-          }
+          if (data.liked) newSet.add(postId);
+          else newSet.delete(postId);
           return newSet;
         });
       } catch (err) {
@@ -224,54 +210,137 @@ useEffect(() => {
     setCommentTextMap((prev) => ({ ...prev, [postId]: text }));
   }, []);
 
-  const handleCommentSubmit = useCallback(
+  // const commentMutation = useMutation({
+  //   mutationFn: async ({ postId, text }: { postId: number; text: string }) => {
+  //     const res = await commentPost(postId, text);
+  //     return res.comment;
+  //   },
+  //   onMutate: async ({ postId, text }) => {
+  //     await queryClient.cancelQueries({ queryKey: ["comments", postId] });
+
+  //     const previousComments = queryClient.getQueryData<PostCommentUser[]>([
+  //       "comments",
+  //       postId,
+  //     ]);
+
+  //     const optimisticComment: PostCommentUser = {
+  //       id: Date.now(),
+  //       content: text,
+  //       createdAt: new Date().toISOString(),
+  //       user: {
+  //         id: Number(user?.id) || 0,
+  //         name: user?.name || "You",
+  //         email: user?.email || "",
+  //       },
+  //     };
+
+  //     queryClient.setQueryData<PostCommentUser[]>(
+  //       ["comments", postId],
+  //       (old = []) => [optimisticComment, ...old]
+  //     );
+
+  //     return { previousComments };
+  //   },
+  //   onError: (err, variables, context) => {
+  //     if (context?.previousComments) {
+  //       queryClient.setQueryData(["comments", variables.postId], context.previousComments);
+  //     }
+  //   },
+  //   onSettled: (data, error, variables) => {
+  //     queryClient.invalidateQueries({ queryKey: ["comments", variables.postId] });
+  //   },
+  // });
+
+  const commentMutation = useMutation({
+    mutationFn: async ({ postId, text }: { postId: number; text: string }) => {
+      const res = await commentPost(postId, text);
+      return res.comment;
+    },
+    onMutate: async ({ postId, text }) => {
+      // stop ongoing refetches
+      await queryClient.cancelQueries({ queryKey: ["comments", postId] });
+      await queryClient.cancelQueries({ queryKey: ["posts"] });
+
+      const previousComments = queryClient.getQueryData<PostCommentUser[]>([
+        "comments",
+        postId,
+      ]);
+      const previousPosts = queryClient.getQueryData<InfiniteData<PostType[]>>([
+        "posts",
+      ]);
+
+      const optimisticComment: PostCommentUser = {
+        id: Date.now(),
+        content: text,
+        createdAt: new Date().toISOString(),
+        user: {
+          id: Number(user?.id) || 0,
+          name: user?.name || "You",
+          email: user?.email || "",
+        },
+      };
+
+      queryClient.setQueryData<PostCommentUser[]>(
+        ["comments", postId],
+        (old = []) => [optimisticComment, ...old]
+      );
+
+      if (previousPosts) {
+        const newPages = previousPosts.pages.map((page) =>
+          page.map((p) =>
+            p.id === postId
+              ? { ...p, commentCount: (p.commentCount || 0) + 1 }
+              : p
+          )
+        );
+        queryClient.setQueryData(["posts"], {
+          ...previousPosts,
+          pages: newPages,
+        });
+      }
+
+      return { previousComments, previousPosts };
+    },
+    onError: (err, variables, context) => {
+      if (context?.previousComments) {
+        queryClient.setQueryData(
+          ["comments", variables.postId],
+          context.previousComments
+        );
+      }
+      if (context?.previousPosts) {
+        queryClient.setQueryData(["posts"], context.previousPosts);
+      }
+    },
+    onSettled: (data, error, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: ["comments", variables.postId],
+      });
+      queryClient.invalidateQueries({ queryKey: ["posts"] });
+    },
+  });
+
+  // const handleCommentSubmit = (postId: number) => {
+  //   const text = commentTextMap[postId]?.trim();
+  //   if (!text) return;
+  //   setCommentTextMap((prev) => ({ ...prev, [postId]: "" }));
+  //   commentMutation.mutate({ postId, text });
+  // };
+
+  const handleCommentSubmit = React.useCallback(
     async (postId: number) => {
       const text = commentTextMap[postId]?.trim();
       if (!text) return;
+
       setCommentTextMap((prev) => ({ ...prev, [postId]: "" }));
-      try {
-        const newComment: { comment: CommentFromAPI } = await commentPost(
-          postId,
-          text
-        );
-        const safeComment: PostCommentUser = {
-          ...newComment.comment,
-          user: newComment.comment.user || {
-            id: 0,
-            name: "Unknown",
-            email: "",
-          },
-        };
-        setCommentsMap((prev) => ({
-          ...prev,
-          [postId]: [safeComment, ...(prev[postId] || [])],
-        }));
-        queryClient.invalidateQueries({ queryKey: ["posts"] });
-      } catch (err) {
-        console.error(err);
-      }
+      await commentMutation.mutateAsync({ postId, text });
     },
-    [commentTextMap, queryClient]
+    [commentTextMap, commentMutation]
   );
 
-  const handleShowComments = useCallback(
-    async (postId: number) => {
-      if (activeCommentPost === postId) {
-        setActiveCommentPost(null);
-        return;
-      }
-      setActiveCommentPost(postId);
-      if (!commentsMap[postId]) {
-        try {
-          const comments = await getPostComments(postId);
-          setCommentsMap((prev) => ({ ...prev, [postId]: comments }));
-        } catch (err) {
-          console.error(err);
-        }
-      }
-    },
-    [activeCommentPost, commentsMap]
-  );
+  const handleShowComments = useCallback((postId: number) => {
+    setActiveCommentPost((prev) => (prev === postId ? null : postId));
+  }, []);
 
   const handleShowReposts = useCallback(async (post: PostType) => {
     setRepostModalPost(post);
@@ -298,7 +367,7 @@ useEffect(() => {
             isReposted={repostedPosts.has(post.id)}
             isCommentSectionOpen={activeCommentPost === post.id}
             commentText={commentTextMap[post.id] || ""}
-            comments={commentsMap[post.id] || []}
+            comments={activeCommentPost === post.id ? commentsData || [] : []}
             showEmojiPicker={showEmojiPickerFor === post.id}
             isRepostDropdownOpen={
               reposting?.post.id === post.id && reposting.openDropdown
@@ -321,13 +390,35 @@ useEffect(() => {
           />
         );
       }),
+    // [
+    //   posts,
+    //   likedPosts,
+    //   repostedPosts,
+    //   activeCommentPost,
+    //   commentTextMap,
+    //   showEmojiPickerFor,
+    //   reposting,
+    //   activeLikesBox,
+    //   timeSince,
+    //   handleLike,
+    //   handleShowComments,
+    //   handleCommentChange,
+    //   handleCommentSubmit,
+    //   handleRepost,
+    //   handleShowReposts,
+    //   setLightbox,
+    //   setActiveLikesBox,
+    //   setShowEmojiPickerFor,
+    //   setReposting,
+    //   setIsModalOpen,
+    //   lastPostRef,
+    // ]
     [
       posts,
       likedPosts,
       repostedPosts,
       activeCommentPost,
       commentTextMap,
-      commentsMap,
       showEmojiPickerFor,
       reposting,
       activeLikesBox,
@@ -344,22 +435,15 @@ useEffect(() => {
       setReposting,
       setIsModalOpen,
       lastPostRef,
+      commentsData,
     ]
   );
 
-  if (isLoading) {
-    return <p className="text-center p-8">Loading feed...</p>;
-  }
-
-  if (isError) {
+  if (isLoading) return <p className="text-center p-8">Loading feed...</p>;
+  if (isError)
     return <p className="text-center p-8 text-red-500">Failed to load feed.</p>;
-  }
-
-  if (posts.length === 0) {
-    return (
-      <p className="text-center p-8 text-gray-500">No posts available.</p>
-    );
-  }
+  if (posts.length === 0)
+    return <p className="text-center p-8 text-gray-500">No posts available.</p>;
 
   return (
     <>
@@ -378,6 +462,7 @@ useEffect(() => {
             onSubmit={handleRepostFromModal}
           />
         )}
+
         {lightbox && lightbox.post && (
           <MediaLightbox
             post={lightbox.post}
@@ -386,6 +471,7 @@ useEffect(() => {
             onClose={() => setLightbox(null)}
           />
         )}
+
         {repostModalPost && (
           <RepostDialog
             onClose={() => setRepostModalPost(null)}
@@ -393,39 +479,32 @@ useEffect(() => {
             loading={repostLoading}
             originalPost={repostModalPost}
             timeSince={timeSince}
+            postItemProps={{
+              isLiked: likedPosts.has(repostModalPost.id),
+              isReposted: repostedPosts.has(repostModalPost.id),
+              isCommentSectionOpen: activeCommentPost === repostModalPost.id,
+              commentText: commentTextMap[repostModalPost.id] || "",
+              comments:
+                activeCommentPost === repostModalPost.id
+                  ? commentsData || []
+                  : [],
+              showEmojiPicker: showEmojiPickerFor === repostModalPost.id,
+              activeLikesBoxId: activeLikesBox,
+              handleLike,
+              // handleShowComments,
+              // handleCommentChange,
+              // handleCommentSubmit,
+              handleRepost,
+              handleShowReposts,
+              // setLightbox,
+              // setActiveLikesBox,
+              setShowEmojiPickerFor,
+              setReposting,
+              setIsModalOpen,
+              hideRepostButton: true,
+            }}
           />
         )}
-        {repostModalPost && (
-        <RepostDialog
-          onClose={() => setRepostModalPost(null)}
-          reposts={repostList}
-          loading={repostLoading}
-          originalPost={repostModalPost}
-          timeSince={timeSince}
-          postItemProps={{
-            isLiked: likedPosts.has(repostModalPost.id),
-            isReposted: repostedPosts.has(repostModalPost.id),
-            isCommentSectionOpen: activeCommentPost === repostModalPost.id,
-            commentText: commentTextMap[repostModalPost.id] || "",
-            comments: commentsMap[repostModalPost.id] || [],
-            showEmojiPicker: showEmojiPickerFor === repostModalPost.id,
-            activeLikesBoxId: activeLikesBox,
-            handleLike,
-            handleShowComments,
-            handleCommentChange,
-            handleCommentSubmit,
-            handleRepost,
-            handleShowReposts,
-            setLightbox,
-            setActiveLikesBox,
-            setShowEmojiPickerFor,
-            setReposting,
-            setIsModalOpen,
-            hideRepostButton: true, // keep the internal repost button hidden
-          }}
-        />
-      )}
-
       </Suspense>
     </>
   );

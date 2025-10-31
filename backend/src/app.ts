@@ -16,7 +16,7 @@ app.use(cors(corsOptions));
 app.use(express.json());
 
 app.use("/auth", userRoutes);
-app.get("/me", authenticate, (req, res) => {
+app.get("/session", authenticate, (req, res) => {
   res.json({ user: req.user });
 });
 app.use("/posts", postRoutes);

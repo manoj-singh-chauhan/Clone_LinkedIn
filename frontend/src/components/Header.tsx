@@ -31,7 +31,7 @@ const Header: React.FC = () => {
           </g>
         </svg>
 
-        <div className="relative hidden sm:flex items-center w-48 md:w-64 lg:w-72">
+        <div className="relative hidden sm:flex items-center w-48 md:w-64 lg:w-68">
           <FaSearch className="absolute left-3 text-gray-500 text-sm" />
           <input
             type="text"
@@ -42,40 +42,40 @@ const Header: React.FC = () => {
       </div>
       
       
-      <nav className="flex space-x-6 md:space-x-10 text-gray-600">
+      <nav className="flex space-x-4 md:space-x-10 text-gray-600">
         <Link
           to="/home"
           className="flex flex-col items-center hover:text-blue-600"
         >
-          <IoHome size={22} />
+          <IoHome size={18} />
           <span className="text-xs hidden md:block">Home</span>
         </Link>
         <Link
           to="/network"
           className="flex flex-col items-center hover:text-blue-600"
         >
-          <BsFillPeopleFill size={22} />
+          <BsFillPeopleFill size={18} />
           <span className="text-xs hidden md:block">My Network</span>
         </Link>
         <Link
           to="/jobs"
           className="flex flex-col items-center hover:text-blue-600"
         >
-          <FaShoppingBag size={20} />
+          <FaShoppingBag size={18} />
           <span className="text-xs hidden md:block">Jobs</span>
         </Link>
         <Link
           to="/messaging"
           className="flex flex-col items-center hover:text-blue-600"
         >
-          <AiFillMessage size={22} />
+          <AiFillMessage size={18} />
           <span className="text-xs hidden md:block">Messaging</span>
         </Link>
         <Link
           to="/notifications"
           className="flex flex-col items-center hover:text-blue-600"
         >
-          <IoMdNotifications size={22} />
+          <IoMdNotifications size={18} />
           <span className="text-xs hidden md:block">Notifications</span>
         </Link>
       </nav>

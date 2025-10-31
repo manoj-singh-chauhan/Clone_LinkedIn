@@ -1,16 +1,23 @@
 import React, { useState, useEffect } from "react";
 import { MdAccountCircle } from "react-icons/md";
-import { RepostWithUser, Post as PostType } from "../../api/Post";
-import PostItem from "./PostItem";
+import { RepostWithUser, Post as PostType, PostCommentUser } from "../../api/Post";
+import PostItem, { RepostingPost } from "./PostItem";
 
-interface PostItemProps {
-  post: PostType;
-  isLiked: boolean;
-  timeSince: (dateString: string) => string;
-  handleLike: (postId: number) => Promise<void>;
-  hideRepostButton?: boolean;
-  disableRepostCountClick?: boolean;
-}
+
+// interface PostItemProps {
+//   post: PostType;
+//   isLiked: boolean;
+//   timeSince: (dateString: string) => string;
+//   handleLike: (postId: number) => Promise<void>;
+//   hideRepostButton?: boolean;
+//   disableRepostCountClick?: boolean;
+// }
+
+// type MediaItem = {
+//   url: string;
+//   type: "image" | "video" | "document";
+// };
+
 
 interface RepostDialogProps {
   onClose: () => void;
@@ -20,6 +27,43 @@ interface RepostDialogProps {
   timeSince: (dateString: string) => string;
   postItemProps?: Partial<PostItemProps>;
 }
+
+interface PostItemProps {
+  post: PostType;
+  isLiked: boolean;
+  isReposted?: boolean;
+  isCommentSectionOpen?: boolean;
+  commentText?: string;
+  comments?: PostCommentUser[];
+  showEmojiPicker?: boolean;
+  activeLikesBoxId?: number | null;
+
+  timeSince: (dateString: string) => string;
+  handleLike: (postId: number) => Promise<void>;
+
+  
+  // handleShowComments?: (postId: number) => void;
+  // handleCommentChange?: (postId: number, text: string) => void;
+  // handleCommentSubmit?: (postId: number) => void;
+  handleRepost?: (postId: number, comment?: string) => Promise<void>;
+  handleShowReposts?: (post: PostType) => void;
+
+  // setLightbox?: React.Dispatch<
+  //   React.SetStateAction<{ media: MediaItem[]; index: number; post: PostType } | null>
+  // >;
+  setActiveLikesBox?: React.Dispatch<React.SetStateAction<number | null>>;
+  setShowEmojiPickerFor?: React.Dispatch<React.SetStateAction<number | null>>;
+  setReposting?: React.Dispatch<
+    React.SetStateAction<RepostingPost | null>
+  >;
+  setIsModalOpen?: React.Dispatch<React.SetStateAction<PostType | null>>;
+
+  hideRepostButton?: boolean;
+  disableRepostCountClick?: boolean;
+}
+
+
+
 
 const RepostDialog: React.FC<RepostDialogProps> = ({
   onClose,
@@ -60,9 +104,7 @@ const RepostDialog: React.FC<RepostDialogProps> = ({
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[1000]">
-      {/* Dialog Container */}
-      <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[85vh] flex flex-col shadow-xl overflow-hidden animate-fadeIn">
-        {/* Header */}
+      <div className="bg-white rounded-sm w-full max-w-2xl max-h-[90vh] flex flex-col  overflow-hidden animate-fadeIn">
         <div className="flex justify-between items-center px-5 py-4  sticky top-0 bg-white z-10">
           <h3 className="text-lg font-semibold text-gray-900">
             {reposts.length} Repost{reposts.length !== 1 ? "s" : ""}
@@ -75,7 +117,6 @@ const RepostDialog: React.FC<RepostDialogProps> = ({
           </button>
         </div>
 
-        {/* Body */}
         <div className="overflow-y-auto px-5 py-4 space-y-6">
           {loading ? (
             <p className="text-center text-gray-500 py-12 text-base">
@@ -103,7 +144,7 @@ const RepostDialog: React.FC<RepostDialogProps> = ({
                   </div>
                 </div>
 
-                {/* Original Post */}
+                
                 <div 
                 className="border border-gray-200 rounded-xl bg-gray-50">
                   <PostItem

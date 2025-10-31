@@ -46,8 +46,11 @@ interface PostItemProps {
   activeLikesBoxId: number | null;
   timeSince: (dateString: string) => string;
   handleLike: (postId: number) => void;
-  handleShowComments: (postId: number) => Promise<void>;
+  // handleShowComments: (postId: number) => Promise<void>;
+  handleShowComments: (postId: number) => void;
+
   handleCommentChange: (postId: number, text: string) => void;
+  // handleCommentSubmit: (postId: number) => Promise<void>;
   handleCommentSubmit: (postId: number) => Promise<void>;
   handleRepost: (postId: number, comment?: string) => Promise<void>;
   setLightbox: React.Dispatch<
@@ -109,6 +112,25 @@ const PostItem: React.FC<PostItemProps> = memo(
 
     const [isExpanded, setIsExpanded] = useState(false);
 
+    const renderContentWithHashtags = (text: string) => {
+      const parts = text.split(/(#[a-zA-Z0-9_]+)/g); // detect #hashtags
+      return parts.map((part, index) => {
+        if (part.startsWith("#")) {
+          return (
+            <span
+              key={index}
+              className="text-blue-600 font-medium cursor-pointer hover:underline"
+              // onClick={() => console.log("Clicked hashtag:", part)}
+            >
+              {part}
+            </span>
+          );
+        }
+        return part;
+      });
+    };
+
+
     return (
       <div
         ref={isLastPost ? lastPostRef : null}
@@ -157,7 +179,7 @@ const PostItem: React.FC<PostItemProps> = memo(
         {post.content &&
           (() => {
             const MAX_VISIBLE_CHARS = 200;
-            const MAX_NEWLINES = 4; // limit max visible lines
+            const MAX_NEWLINES = 4; 
 
             // Split content into lines and limit lines first
             const lines = post.content.split("\n");
@@ -178,7 +200,9 @@ const PostItem: React.FC<PostItemProps> = memo(
 
             return (
               <div className="text-gray-800 whitespace-pre-wrap break-words leading-relaxed mb-4 text-base px-2">
-                {displayText}
+                {/* {displayText} */}
+                {renderContentWithHashtags(displayText)}
+
                 {shouldTruncate && (
                   <button
                     onClick={() => setIsExpanded(!isExpanded)}
@@ -325,41 +349,49 @@ const PostItem: React.FC<PostItemProps> = memo(
           <div className="mt-4 space-y-3 px-2">
             <div className="flex gap-2 items-start">
               <MdAccountCircle className="w-10 h-10 text-gray-400 rounded-full flex-shrink-0" />
-              <div className="flex-1 flex flex-col">
-                <div className="flex items-center border border-gray-300 rounded-full px-3 py-1">
-                  <input
-                    type="text"
-                    placeholder="Write a comment..."
-                    value={commentText}
-                    onChange={(e) =>
-                      handleCommentChange(post.id, e.target.value)
-                    }
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") handleCommentSubmit(post.id);
-                    }}
-                    className="flex-1 outline-none py-2 px-1 rounded-full"
-                  />
-                  <BsEmojiSmile
-                    size={22}
-                    className="text-gray-500 cursor-pointer hover:text-yellow-500 ml-2"
-                    onClick={() =>
-                      setShowEmojiPickerFor(showEmojiPicker ? null : post.id)
-                    }
-                  />
+              <div className="flex-1 flex flex-col relative">
+                  <div className="flex items-center border border-gray-300 rounded-full px-3 py-1">
+                    <input
+                      type="text"
+                      placeholder="Write a comment..."
+                      value={commentText}
+                      onChange={(e) => handleCommentChange(post.id, e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") handleCommentSubmit(post.id);
+                      }}
+                      className="flex-1 outline-none py-2 px-1 rounded-full"
+                    />
+                    <BsEmojiSmile
+                      size={22}
+                      className="text-gray-500 cursor-pointer hover:text-yellow-500 ml-2"
+                      onClick={() =>
+                        setShowEmojiPickerFor(showEmojiPicker ? null : post.id)
+                      }
+                    />
+                  </div>
+
+                {showEmojiPicker && (
+                  <div className="absolute -right-2 -top-[400px] z-50">
+                    <EmojiPicker
+                      onEmojiClick={handleEmojiClick}
+                      width={350}
+                      height={400}
+                    />
+                  </div>
+                )}
+                  {commentText.trim() && (
+                    <button
+                      className="mt-1 bg-blue-600 text-white px-4 py-1 rounded-full text-sm hover:bg-blue-700 transition self-end"
+                      onClick={() => handleCommentSubmit(post.id)}
+                    >
+                      Send
+                    </button>
+                  )}
                 </div>
 
-                {commentText.trim() && (
-                  <button
-                    className="mt-1 bg-blue-600 text-white px-4 py-1 rounded-full text-sm hover:bg-blue-700 transition self-end"
-                    onClick={() => handleCommentSubmit(post.id)}
-                  >
-                    Send
-                  </button>
-                )}
-              </div>
             </div>
 
-            {showEmojiPicker && (
+            {/* {showEmojiPicker && (
               <div className="absolute z-50 bottom-12 left-0">
                 <EmojiPicker
                   onEmojiClick={handleEmojiClick}
@@ -367,7 +399,7 @@ const PostItem: React.FC<PostItemProps> = memo(
                   height={350}
                 />
               </div>
-            )}
+            )} */}
 
             <div className="space-y-3 mt-2">
               {(comments || []).map((comment) => (
