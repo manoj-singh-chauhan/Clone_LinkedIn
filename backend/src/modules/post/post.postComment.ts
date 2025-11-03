@@ -27,6 +27,7 @@ PostComment.init(
         model: Post,
         key: "id",
       },
+      onDelete: 'CASCADE',  //chek 3
     },
     userId: {
       type: DataTypes.INTEGER,

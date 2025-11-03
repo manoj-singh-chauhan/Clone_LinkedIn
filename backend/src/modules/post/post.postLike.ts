@@ -23,6 +23,7 @@ PostLike.init(
         model: Post,
         key: "id",
       },
+      onDelete: 'CASCADE',          //check 2
     },
     userId: {
       type: DataTypes.INTEGER,

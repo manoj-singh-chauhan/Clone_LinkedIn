@@ -325,3 +325,27 @@ export const updatePost = async (
     throw error;
   }
 };
+
+export interface DeletePostResponse {
+  message: string;
+}
+
+export const deletePost = async (
+  postId: number
+): Promise<DeletePostResponse> => {
+  try {
+    const res = await api.delete<DeletePostResponse>(
+      `/posts/${postId}/postdelete`
+    );
+    return res.data;
+  } catch (error) {
+    if (error instanceof AxiosError && error.response) {
+      throw (
+        (error.response.data as APIErrorResponse) || {
+          message: "Failed to delete post",
+        }
+      );
+    }
+    throw error;
+  }
+};

@@ -5,6 +5,15 @@ import {
   AiOutlineComment,
   AiOutlineRetweet,
 } from "react-icons/ai";
+import {
+  MdLink,
+  MdDelete,
+  MdReport,
+  MdPersonAdd,
+  MdVisibilityOff,
+  MdBlock,
+  MdEdit,
+} from "react-icons/md";
 import { MdAccountCircle } from "react-icons/md";
 import { FaRegFileAlt } from "react-icons/fa";
 import { BiCommentDetail } from "react-icons/bi";
@@ -69,6 +78,12 @@ interface PostItemProps {
   lastPostRef?: (node: HTMLDivElement | null) => void;
   disableRepostCountClick?: boolean;
   handleEdit: (post: PostType) => void;
+  handleDeletePost: (postId: number) => void;
+  handleCopyLink: (postId: number) => void;
+  handleFollowAuthor: (authorId: number) => void;
+  handleHidePost: (postId: number) => void;
+  handleBlockAuthor: (authorId: number) => void;
+  handleReportPost: (postId: number) => void;
 }
 
 const PostItem: React.FC<PostItemProps> = memo(
@@ -99,9 +114,16 @@ const PostItem: React.FC<PostItemProps> = memo(
     hideRepostButton,
     disableRepostCountClick,
     handleEdit,
+    handleDeletePost,
+    handleCopyLink,
+    handleFollowAuthor,
+    handleHidePost,
+    handleBlockAuthor,
+    handleReportPost,
   }) => {
     const { user } = useAuth();
-    const isAuthor = user?.id === post.author.id;
+    // const isAuthor = user?.id === post.author.id;
+    const isAuthor = Number(user?.id) === post.author.id;
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const authorName = post.author?.profile?.name || "Unknown";
     const postDate = post.createdAt ? timeSince(post.createdAt) : "";
@@ -159,44 +181,85 @@ const PostItem: React.FC<PostItemProps> = memo(
               <BsThreeDots size={20} className="text-gray-600" />
             </button>
 
-            
+            {/* Dropdown Menu */}
             {isMenuOpen && (
               <div
-                className="absolute top-12 right-2 bg-white border border-gray-200 rounded-md shadow-lg z-10 w-48" // Made menu wider
+                className="absolute top-12 right-2 bg-white border border-gray-200 rounded-md shadow-lg z-10 w-56" // Made it wider for icons
                 onMouseLeave={() => setIsMenuOpen(false)}
               >
-               
-                {isAuthor && (
-                  <button
+                <ul className="py-1">
+                  {/* --- OPTION FOR EVERYONE --- */}
+                  <MenuItem
+                    icon={<MdLink size={18} />}
+                    text="Copy link to post"
                     onClick={() => {
-                      handleEdit(post);
+                      handleCopyLink(post.id);
                       setIsMenuOpen(false);
                     }}
-                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                  >
-                    Edit post
-                  </button>
-                )}
+                  />
 
-                
-                {!isAuthor && (
-                  <button
-                    // onClick={() => alert(`Following ${authorName}`)}
-                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                  >
-                    Follow {authorName}
-                  </button>
-                  
-                )}
-                {!isAuthor && (
-                  <button
-                    // onClick={() => alert(`Following ${authorName}`)}
-                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                  >
-                    Report post
-                  </button>
-                  
-                )}
+                  {isAuthor && (
+                    <>
+                      {/* --- AUTHOR-ONLY OPTIONS --- */}
+                      <MenuItem
+                        icon={<MdEdit size={18} />}
+                        text="Edit post"
+                        onClick={() => {
+                          handleEdit(post);
+                          setIsMenuOpen(false);
+                        }}
+                      />
+                      <MenuItem
+                        icon={<MdDelete size={18} />}
+                        text="Delete post"
+                        onClick={() => {
+                          handleDeletePost(post.id);
+                          setIsMenuOpen(false);
+                        }}
+                        className="text-red-600 hover:bg-red-50"
+                      />
+                    </>
+                  )}
+
+                  {!isAuthor && (
+                    <>
+                      {/* --- OTHER USER POST OPTIONS --- */}
+                      <MenuItem
+                        icon={<MdPersonAdd size={18} />}
+                        text={`Follow ${authorName}`}
+                        onClick={() => {
+                          handleFollowAuthor(post.author.id);
+                          setIsMenuOpen(false);
+                        }}
+                      />
+                      <MenuItem
+                        icon={<MdVisibilityOff size={18} />}
+                        text="I don't want to see this"
+                        onClick={() => {
+                          handleHidePost(post.id);
+                          setIsMenuOpen(false);
+                        }}
+                      />
+                      <MenuItem
+                        icon={<MdBlock size={18} />}
+                        text={`Block ${authorName}`}
+                        onClick={() => {
+                          handleBlockAuthor(post.author.id);
+                          setIsMenuOpen(false);
+                        }}
+                      />
+                      <MenuItem
+                        icon={<MdReport size={18} />}
+                        text="Report post"
+                        onClick={() => {
+                          handleReportPost(post.id);
+                          setIsMenuOpen(false);
+                        }}
+                        className="text-red-600 hover:bg-red-50"
+                      />
+                    </>
+                  )}
+                </ul>
               </div>
             )}
           </div>
@@ -548,5 +611,26 @@ export const PostMediaGrid: React.FC<{
     </div>
   );
 };
+
+
+
+const MenuItem: React.FC<{
+  icon: React.ReactNode;
+  text: string;
+  onClick: () => void;
+  className?: string;
+}> = ({ icon, text, onClick, className = "" }) => (
+  <li>
+    <button
+      onClick={onClick}
+      className={`w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-3 ${className}`}
+    >
+      {icon}
+      <span>{text}</span>
+    </button>
+  </li>
+);
+
+
 
 export default PostItem;

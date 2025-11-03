@@ -7,6 +7,7 @@ import {
   PostLikeService,
   PostCommentService,
   updatePostService,
+  deletePostService,
 } from "./post.service";
 import "multer";
 import { getPostLikesService } from "./post.service";
@@ -28,9 +29,13 @@ export const createPost = async (req: AuthenticatedRequest, res: Response) => {
     return res.status(201).json({ message: "Post created", post: newPost });
   } catch (err: any) {
     if (err.errors) {
-      return res.status(400).json({ message: "Validation failed", errors: err.errors });
+      return res
+        .status(400)
+        .json({ message: "Validation failed", errors: err.errors });
     }
-    return res.status(err.statusCode || 500).json({ message: err.message || "Failed to create post" });
+    return res
+      .status(err.statusCode || 500)
+      .json({ message: err.message || "Failed to create post" });
   }
 };
 // FETCH POSTS
@@ -177,9 +182,7 @@ export const getPostCommentsHandler = async (
   }
 };
 
-
-
-
+//reposts of perticular post
 export const getPostRepostsHandler = async (
   req: AuthenticatedRequest,
   res: Response
@@ -198,6 +201,7 @@ export const getPostRepostsHandler = async (
   }
 };
 
+//update post like content 
 export const updatePostHandler = async (
   req: AuthenticatedRequest,
   res: Response
@@ -207,7 +211,7 @@ export const updatePostHandler = async (
     const userId = req.userId;
     const { content } = req.body;
 
-    console.log("frontend data ", req.body);
+    // console.log("frontend data ", req.body);
 
     if (!userId) {
       return res.status(401).json({ message: "Unauthorized" });
@@ -218,8 +222,6 @@ export const updatePostHandler = async (
 
     const updatedPost = await updatePostService(postId, userId, content);
 
-    // console.log("final data ",res);
-
     return res
       .status(200)
       .json({ message: "Post updated successfully", post: updatedPost });
@@ -227,5 +229,32 @@ export const updatePostHandler = async (
     return res
       .status(err.statusCode || 500)
       .json({ message: err.message || "Failed to update post" });
+  }
+};
+
+
+// DELETE POST
+export const deletePostHandler = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
+  try {
+    const postId = Number(req.params.id);
+    const userId = req.userId;
+
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+    if (isNaN(postId)) {
+      return res.status(400).json({ message: "Invalid post ID" });
+    }
+
+    await deletePostService(postId, userId);
+
+    return res.status(200).json({ message: "Post deleted successfully" });
+  } catch (err: any) {
+    return res
+      .status(err.statusCode || 500)
+      .json({ message: err.message || "Failed to delete post" });
   }
 };

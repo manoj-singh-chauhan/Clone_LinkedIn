@@ -23,8 +23,14 @@ export const PostService = {
       }
     }
 
-    if (!validatedBody.content && media.length === 0 && !validatedBody.originalPostId) {
-      const error = new Error("Post must contain content, files, or be a repost.");
+    if (
+      !validatedBody.content &&
+      media.length === 0 &&
+      !validatedBody.originalPostId
+    ) {
+      const error = new Error(
+        "Post must contain content, files, or be a repost."
+      );
       (error as any).statusCode = 400;
       throw error;
     }
@@ -89,7 +95,7 @@ export const PostLikeService = {
 
       if (existingLike) {
         await existingLike.destroy({ transaction: t });
-         post.likeCount = Math.max(0, post.likeCount - 1);
+        post.likeCount = Math.max(0, post.likeCount - 1);
       } else {
         await PostLike.create({ postId, userId }, { transaction: t });
         post.likeCount += 1;
@@ -318,8 +324,6 @@ export const getPostCommentsService = async (
   }));
 };
 
-
-
 export interface PostWithAuthor extends Post {
   author?: {
     id: number;
@@ -353,13 +357,11 @@ export const getPostRepostsService = async (postId: number) => {
   }));
 };
 
-
 export const updatePostService = async (
   postId: number,
   userId: number,
   content: string
 ) => {
-  // 3. WRAP THE LOGIC
   return withTransaction(async (t) => {
     const post = await Post.findByPk(postId, { transaction: t });
 
@@ -376,9 +378,33 @@ export const updatePostService = async (
     }
 
     post.content = content;
-    // 4. PASS THE TRANSACTION TO .save()
     await post.save({ transaction: t });
 
     return post.toJSON();
+  });
+};
+
+
+export const deletePostService = async (postId: number, userId: number) => {
+  return withTransaction(async (t) => {
+    const post = await Post.findByPk(postId, { transaction: t });
+
+    if (!post) {
+      const error = new Error("Post not found");
+      (error as any).statusCode = 404;
+      throw error;
+    }
+
+    
+    if (post.userId !== userId) {
+      const error = new Error("You are not authorized to delete this post");
+      (error as any).statusCode = 403; 
+      throw error;
+    }
+
+    await post.destroy({ transaction: t });
+
+
+    return { message: "Post deleted successfully" };
   });
 };

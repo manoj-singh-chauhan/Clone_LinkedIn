@@ -14,6 +14,7 @@ import {
   getPostComments,
   getPostReposts,
   updatePost,
+  deletePost,
   Post as PostType,
   RepostWithUser,
 } from "../../api/Post";
@@ -34,6 +35,7 @@ import {
   useMutation,
 } from "@tanstack/react-query";
 import PostDialog from "../PostDialogs/PostDialog";
+import DeleteConfirmModal from "./DeleteConfirmModal";
 
 const Feed: React.FC = () => {
   const { user } = useAuth();
@@ -66,6 +68,7 @@ const Feed: React.FC = () => {
   const limit = 5;
 
   const [editingPost, setEditingPost] = useState<PostType | null>(null);
+  const [postToDelete, setPostToDelete] = useState<PostType | null>(null);
 
   const {
     data,
@@ -126,6 +129,29 @@ const Feed: React.FC = () => {
     },
     onError: (error) => {
       console.error("Failed to update post:", error);
+    },
+  });
+
+  const deletePostMutation = useMutation({
+    mutationFn: (postId: number) => deletePost(postId),
+    onSuccess: (data, postId) => {
+      // console.log(data.message);
+      queryClient.setQueryData<InfiniteData<PostType[]>>(
+        ["posts"],
+        (oldData) => {
+          if (!oldData) return oldData;
+          return {
+            ...oldData,
+            pages: oldData.pages.map((page) =>
+              page.filter((post) => post.id !== postId)
+            ),
+          };
+        }
+      );
+    },
+    onError: (error) => {
+      console.error("Failed to delete post:", error);
+      alert("Error: Could not delete post.");
     },
   });
 
@@ -353,6 +379,47 @@ const Feed: React.FC = () => {
     [editingPost, updatePostMutation]
   );
 
+  
+  const handleDeletePost = useCallback(
+    (postId: number) => {
+      // Find the post from your posts array to pass to the modal
+      const post = posts.find((p) => p.id === postId);
+      if (post) {
+        setPostToDelete(post);
+      }
+    },
+    [posts]
+  );
+
+  const onConfirmDelete = () => {
+    if (postToDelete) {
+      deletePostMutation.mutate(postToDelete.id);
+      setPostToDelete(null);
+    }
+  };
+
+  const handleCopyLink = useCallback((postId: number) => {
+    const postUrl = `${window.location.origin}/home/post/${postId}`;
+    navigator.clipboard.writeText(postUrl);
+    alert("Link copied to clipboard!");
+  }, []);
+
+  const handleFollowAuthor = useCallback(() => {
+    alert("Following");
+  }, []);
+
+  const handleHidePost = useCallback(() => {
+    alert("Post hidden");
+  }, []);
+
+  const handleBlockAuthor = useCallback(() => {
+    alert("Author blocked");
+  }, []);
+
+  const handleReportPost = useCallback(() => {
+    alert("Post reported");
+  }, []);
+
   const memoizedPosts = useMemo(
     () =>
       posts.map((post, index) => {
@@ -386,6 +453,12 @@ const Feed: React.FC = () => {
             isLastPost={isLastPost}
             lastPostRef={lastPostRef}
             handleEdit={handleEditClick}
+            handleDeletePost={handleDeletePost}
+            handleCopyLink={handleCopyLink}
+            handleFollowAuthor={handleFollowAuthor}
+            handleHidePost={handleHidePost}
+            handleBlockAuthor={handleBlockAuthor}
+            handleReportPost={handleReportPost}
           />
         );
       }),
@@ -408,6 +481,12 @@ const Feed: React.FC = () => {
       handleShowReposts,
       handleEditClick,
       lastPostRef,
+      handleDeletePost,
+      handleCopyLink,
+      handleFollowAuthor,
+      handleHidePost,
+      handleBlockAuthor,
+      handleReportPost,
     ]
   );
 
@@ -482,6 +561,13 @@ const Feed: React.FC = () => {
             initialMedia={editingPost.media}
           />
         )}
+        <DeleteConfirmModal
+          isOpen={!!postToDelete}
+          onClose={() => setPostToDelete(null)}
+          onConfirm={onConfirmDelete}
+          title="Delete post?"
+          message={`Are you sure you want to permanently remove this post from Linkedin`}
+        />
       </Suspense>
     </>
   );

@@ -77,7 +77,12 @@ Post.init(
     },
     originalPostId: { 
       type: DataTypes.INTEGER, 
-      allowNull: true 
+      allowNull: true,          //check 1
+      references: {
+        model: Post,
+        key: "id",
+      },
+      onDelete: 'CASCADE',
     },
     repostComment: { 
       type: DataTypes.STRING, 
