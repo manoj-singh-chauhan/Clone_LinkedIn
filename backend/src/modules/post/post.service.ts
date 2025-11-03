@@ -7,9 +7,11 @@ import User from "../auth/user.model";
 import Profile from "../profile/profile.model";
 import { withTransaction } from "../../utils/transaction";
 import { Op } from "sequelize";
+import CommentLike from "./post.commentLike";
 
 type AllowedMediaType = "image" | "video" | "document";
 
+//Post Service
 export const PostService = {
   createPost: async (validatedBody: any, userId: number) => {
     const media: { url: string; type: AllowedMediaType }[] = [];
@@ -116,7 +118,7 @@ export const PostCommentService = {
       if (!post) throw new Error("Post not found");
 
       const comment = await PostComment.create(
-        { postId, userId, content },
+        { postId, userId, content, parentId: null },
         { transaction: t }
       );
 
@@ -129,6 +131,53 @@ export const PostCommentService = {
         userId,
         content: comment.content,
         createdAt: comment.createdAt,
+      };
+    });
+  },
+
+  addReply: async (
+    parentCommentId: number,
+    userId: number,
+    content: string
+  ) => {
+    return withTransaction(async (t) => {
+      const parentComment = await PostComment.findByPk(parentCommentId, {
+        transaction: t,
+      });
+      if (!parentComment) {
+        const error = new Error("Parent comment not found");
+        (error as any).statusCode = 404;
+        throw error;
+      }
+
+      parentComment.replyCount += 1;
+      await parentComment.save({ transaction: t });
+
+      const reply = await PostComment.create(
+        {
+          postId: parentComment.postId,
+          userId,
+          content,
+          parentId: parentCommentId,
+        },
+        { transaction: t }
+      );
+
+      const post = await Post.findByPk(parentComment.postId, {
+        transaction: t,
+      });
+      if (post) {
+        post.commentCount += 1;
+        await post.save({ transaction: t });
+      }
+
+      return {
+        commentId: reply.id,
+        postId: reply.postId,
+        userId,
+        content: reply.content,
+        parentId: reply.parentId,
+        createdAt: reply.createdAt,
       };
     });
   },
@@ -246,7 +295,7 @@ export const PostRepostService = {
   },
 };
 
-// LIKE
+// Get Likes service
 interface LikeWithUser {
   likeId: number;
   user: { id: number; email: string; name?: string | null };
@@ -284,7 +333,7 @@ export const getPostLikesService = async (
   }));
 };
 
-// COMMENT
+// Get comment service
 interface CommentWithUser {
   commentId: number;
   content: string;
@@ -293,14 +342,31 @@ interface CommentWithUser {
 }
 
 export const getPostCommentsService = async (
-  postId: number
+  postId: number,
+  userId: number
 ): Promise<CommentWithUser[]> => {
   const post = await Post.findByPk(postId);
   if (!post)
     throw Object.assign(new Error("Post not found"), { statusCode: 404 });
 
+  const userLikes = await CommentLike.findAll({
+    where: { userId },
+    include: [
+      {
+        model: PostComment,
+        as: "comment",
+        where: { postId: postId },
+        attributes: [],
+      },
+    ],
+  });
+  const likedCommentIds = new Set(userLikes.map((like) => like.commentId));
+
   const comments = await PostComment.findAll({
-    where: { postId },
+    where: {
+      postId,
+      parentId: null,
+    },
     include: [
       {
         model: User,
@@ -315,6 +381,9 @@ export const getPostCommentsService = async (
   return comments.map((comment: any) => ({
     commentId: comment.id,
     content: comment.content,
+    likeCount: comment.likeCount,
+    replyCount: comment.replyCount,
+    likedByCurrentUser: likedCommentIds.has(comment.id),
     user: {
       id: comment.user?.id ?? null,
       email: comment.user?.email ?? null,
@@ -324,6 +393,55 @@ export const getPostCommentsService = async (
   }));
 };
 
+//Get perticular comment reply 
+export const getCommentRepliesService = async (
+  parentCommentId: number,
+  userId: number
+): Promise<CommentWithUser[]> => {
+  const userLikes = await CommentLike.findAll({
+    where: { userId },
+    include: [
+      {
+        model: PostComment,
+        as: "comment",
+        where: { parentId: parentCommentId },
+        attributes: [],
+      },
+    ],
+  });
+  const likedCommentIds = new Set(userLikes.map((like) => like.commentId));
+
+  const replies = await PostComment.findAll({
+    where: {
+      parentId: parentCommentId,
+    },
+    include: [
+      {
+        model: User,
+        as: "user",
+        attributes: ["id", "email"],
+        include: [{ model: Profile, as: "profile", attributes: ["name"] }],
+      },
+    ],
+    order: [["createdAt", "ASC"]],
+  });
+
+  return replies.map((reply: any) => ({
+    commentId: reply.id,
+    content: reply.content,
+    likeCount: reply.likeCount,
+    replyCount: reply.replyCount,
+    likedByCurrentUser: likedCommentIds.has(reply.id),
+    user: {
+      id: reply.user?.id ?? null,
+      email: reply.user?.email ?? null,
+      name: reply.user?.profile?.name ?? null,
+    },
+    createdAt: reply.createdAt,
+  }));
+};
+
+//Get all repost of perticular repost 
 export interface PostWithAuthor extends Post {
   author?: {
     id: number;
@@ -357,6 +475,7 @@ export const getPostRepostsService = async (postId: number) => {
   }));
 };
 
+//Edit post 
 export const updatePostService = async (
   postId: number,
   userId: number,
@@ -384,7 +503,7 @@ export const updatePostService = async (
   });
 };
 
-
+//Delete Repost 
 export const deletePostService = async (postId: number, userId: number) => {
   return withTransaction(async (t) => {
     const post = await Post.findByPk(postId, { transaction: t });
@@ -395,16 +514,45 @@ export const deletePostService = async (postId: number, userId: number) => {
       throw error;
     }
 
-    
     if (post.userId !== userId) {
       const error = new Error("You are not authorized to delete this post");
-      (error as any).statusCode = 403; 
+      (error as any).statusCode = 403;
       throw error;
     }
 
     await post.destroy({ transaction: t });
 
-
     return { message: "Post deleted successfully" };
   });
+};
+
+//Like on comment 
+export const CommentLikeService = {
+  toggleLike: async (commentId: number, userId: number) => {
+    return withTransaction(async (t) => {
+      const comment = await PostComment.findByPk(commentId, { transaction: t });
+      if (!comment) {
+        const error = new Error("Comment not found");
+        (error as any).statusCode = 404;
+        throw error;
+      }
+
+      const existingLike = await CommentLike.findOne({
+        where: { commentId, userId },
+        transaction: t,
+      });
+
+      if (existingLike) {
+        await existingLike.destroy({ transaction: t });
+        comment.likeCount = Math.max(0, comment.likeCount - 1);
+        await comment.save({ transaction: t });
+        return { liked: false, likeCount: comment.likeCount };
+      } else {
+        await CommentLike.create({ commentId, userId }, { transaction: t });
+        comment.likeCount += 1;
+        await comment.save({ transaction: t });
+        return { liked: true, likeCount: comment.likeCount };
+      }
+    });
+  },
 };

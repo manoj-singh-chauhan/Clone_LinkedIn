@@ -34,13 +34,15 @@ export interface MediaItem {
 }
 
 export interface PostCommentUser {
-  commentId?: number;
-  id?: number;
+  commentId: number;
   content: string;
   createdAt: string;
+  likeCount: number;
+  replyCount: number;
+  likedByCurrentUser: boolean;
   user?: {
-    id: number;
-    name: string;
+    id: number | null;
+    name: string | null;
     email?: string;
   };
 }
@@ -84,6 +86,15 @@ interface PostItemProps {
   handleHidePost: (postId: number) => void;
   handleBlockAuthor: (authorId: number) => void;
   handleReportPost: (postId: number) => void;
+  handleLikeComment: (commentId: number) => void;
+  replyingTo: number | null;
+  setReplyingTo: React.Dispatch<React.SetStateAction<number | null>>;
+  replyTextMap: Record<number, string>;
+  replyMap: Record<number, PostCommentUser[]>;
+  loadingReplies: number | null;
+  handleReplyChange: (commentId: number, text: string) => void;
+  handleReplySubmit: (commentId: number) => void;
+  handleToggleReplies: (commentId: number) => void;
 }
 
 const PostItem: React.FC<PostItemProps> = memo(
@@ -120,6 +131,15 @@ const PostItem: React.FC<PostItemProps> = memo(
     handleHidePost,
     handleBlockAuthor,
     handleReportPost,
+    handleLikeComment,
+    replyingTo,
+    setReplyingTo,
+    replyTextMap,
+    replyMap,
+    loadingReplies,
+    handleReplyChange,
+    handleReplySubmit,
+    handleToggleReplies,
   }) => {
     const { user } = useAuth();
     // const isAuthor = user?.id === post.author.id;
@@ -188,7 +208,7 @@ const PostItem: React.FC<PostItemProps> = memo(
                 onMouseLeave={() => setIsMenuOpen(false)}
               >
                 <ul className="py-1">
-                  {/* --- OPTION FOR EVERYONE --- */}
+                  {/* option for everyine  */}
                   <MenuItem
                     icon={<MdLink size={18} />}
                     text="Copy link to post"
@@ -200,7 +220,7 @@ const PostItem: React.FC<PostItemProps> = memo(
 
                   {isAuthor && (
                     <>
-                      {/* --- AUTHOR-ONLY OPTIONS --- */}
+                      {/* option for author only */}
                       <MenuItem
                         icon={<MdEdit size={18} />}
                         text="Edit post"
@@ -465,11 +485,17 @@ const PostItem: React.FC<PostItemProps> = memo(
               </div>
             </div>
             <div className="space-y-3 mt-2">
-              {(comments || []).map((comment) => (
-                <div
-                  key={comment.commentId ?? comment.id ?? Math.random()}
-                  className="flex gap-2"
-                >
+              
+              
+         
+          {(comments || []).map((comment) => {
+            const replies = replyMap[comment.commentId] || [];
+            const isReplying = replyingTo === comment.commentId;
+            const areRepliesVisible = replies.length > 0;
+
+            return (
+              <div key={comment.commentId} className="flex flex-col gap-2">
+                <div className="flex gap-2">
                   <MdAccountCircle className="w-8 h-8 text-gray-400 rounded-full flex-shrink-0" />
                   <div className="bg-gray-100 rounded-xl px-3 py-2 flex-1">
                     <p className="text-sm font-semibold text-gray-800">
@@ -478,12 +504,135 @@ const PostItem: React.FC<PostItemProps> = memo(
                     <p className="text-sm text-gray-700 mt-1">
                       {comment.content}
                     </p>
-                    <p className="text-xs text-gray-500 mt-1">
-                      {timeSince(comment.createdAt)} ago
-                    </p>
+                    <div className="text-xs text-gray-500 mt-2 flex items-center gap-2">
+                      <span>{timeSince(comment.createdAt)} ago</span>
+                      <span className="font-bold">·</span>
+                      <button
+                        onClick={() => handleLikeComment(comment.commentId)}
+                        className={`font-semibold hover:underline ${
+                          comment.likedByCurrentUser
+                            ? "text-blue-600"
+                            : "text-gray-600"
+                        }`}
+                      >
+                        Like
+                      </button>
+                      {comment.likeCount > 0 && (
+                        <>
+                          <span className="text-gray-400">·</span>
+                          <span className="flex items-center gap-0.5">
+                            <AiOutlineLike size={14} className="text-gray-500" />
+                            {comment.likeCount}
+                          </span>
+                        </>
+                      )}
+                      <span className="font-bold">·</span>
+                      <button
+                        onClick={() => setReplyingTo(comment.commentId)}
+                        className="font-semibold text-gray-600 hover:underline"
+                      >
+                        Reply
+                      </button>
+                    </div>
                   </div>
                 </div>
-              ))}
+
+                
+                <div className="ml-10">
+                  {comment.replyCount > 0 && (
+                    <button
+                      onClick={() => handleToggleReplies(comment.commentId)}
+                      className="text-sm font-semibold text-gray-600 hover:underline"
+                    >
+                      {loadingReplies === comment.commentId
+                        ? "Loading..."
+                        : areRepliesVisible
+                        ? "Hide replies"
+                        : `View ${comment.replyCount} ${
+                            comment.replyCount > 1 ? "replies" : "reply"
+                          }`}
+                    </button>
+                  )}
+                </div>
+
+                
+                {isReplying && (
+                  <div className="ml-10 mt-2 flex gap-2 items-start">
+                    <MdAccountCircle className="w-8 h-8 text-gray-400 rounded-full flex-shrink-0" />
+                    <div className="flex-1 flex flex-col relative">
+                      <div className="flex items-center border border-gray-300 rounded-full px-3 py-1">
+                        <input
+                          type="text"
+                          placeholder="Write a reply..."
+                          value={replyTextMap[comment.commentId] || ""}
+                          onChange={(e) =>
+                            handleReplyChange(comment.commentId, e.target.value)
+                          }
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter")
+                              handleReplySubmit(comment.commentId);
+                          }}
+                          className="flex-1 outline-none py-1 px-1 rounded-full text-sm"
+                          autoFocus
+                        />
+                      </div>
+                      {(replyTextMap[comment.commentId] || "").trim() && (
+                        <button
+                          className="mt-1 bg-blue-600 text-white px-3 py-0.5 rounded-full text-xs hover:bg-blue-700 transition self-end"
+                          onClick={() => handleReplySubmit(comment.commentId)}
+                        >
+                          Post
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                
+                {areRepliesVisible && (
+                  <div className="ml-10 space-y-3">
+                    {replies.map((reply) => (
+                      <div key={reply.commentId} className="flex gap-2">
+                        <MdAccountCircle className="w-8 h-8 text-gray-400 rounded-full flex-shrink-0" />
+                        <div className="bg-gray-100 rounded-xl px-3 py-2 flex-1">
+                          <p className="text-sm font-semibold text-gray-800">
+                            {reply.user?.name}
+                          </p>
+                          <p className="text-sm text-gray-700 mt-1">
+                            {reply.content}
+                          </p>
+                          <div className="text-xs text-gray-500 mt-2 flex items-center gap-2">
+                            <span>{timeSince(reply.createdAt)} ago</span>
+                            <span className="font-bold">·</span>
+                            <button
+                              onClick={() => handleLikeComment(reply.commentId)}
+                              className={`font-semibold hover:underline ${
+                                reply.likedByCurrentUser
+                                  ? "text-blue-600"
+                                  : "text-gray-600"
+                              }`}
+                            >
+                              Like
+                            </button>
+                            {reply.likeCount > 0 && (
+                              <>
+                                <span className="text-gray-400">·</span>
+                                <span className="flex items-center gap-0.5">
+                                  <AiOutlineLike size={14} className="text-gray-500" />
+                                  {reply.likeCount}
+                                </span>
+                              </>
+                            )}
+                            
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
             </div>
           </div>
         )}

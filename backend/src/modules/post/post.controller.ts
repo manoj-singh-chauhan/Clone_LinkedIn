@@ -8,6 +8,8 @@ import {
   PostCommentService,
   updatePostService,
   deletePostService,
+  CommentLikeService,
+  getCommentRepliesService,
 } from "./post.service";
 import "multer";
 import { getPostLikesService } from "./post.service";
@@ -167,11 +169,13 @@ export const getPostCommentsHandler = async (
   res: Response
 ) => {
   const postId = Number(req.params.id);
+  const userId = req.userId;
   if (isNaN(postId))
     return res.status(400).json({ message: "Invalid post ID" });
+  if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
   try {
-    const comments = await getPostCommentsService(postId);
+    const comments = await getPostCommentsService(postId, userId);
     res
       .status(200)
       .json({ message: "Comments fetched successfully", comments });
@@ -179,6 +183,64 @@ export const getPostCommentsHandler = async (
     res
       .status(err.statusCode || 500)
       .json({ message: err.message || "Failed to fetch comments" });
+  }
+};
+
+//reply of pertuclar comment
+export const commentReplyHandler = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
+  try {
+    const parentCommentId = Number(req.params.id);
+    const userId = req.userId;
+    const { content } = req.body;
+
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+    if (isNaN(parentCommentId)) {
+      return res.status(400).json({ message: "Invalid parent comment ID" });
+    }
+    if (!content?.trim()) {
+      return res.status(400).json({ message: "Reply cannot be empty" });
+    }
+
+    const reply = await PostCommentService.addReply(
+      parentCommentId,
+      userId,
+      content
+    );
+    res.status(201).json(reply);
+  } catch (err: any) {
+    res
+      .status(err.statusCode || 500)
+      .json({ message: err.message || "Failed to post reply" });
+  }
+};
+
+//get comment reply
+export const getCommentRepliesHandler = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
+  try {
+    const parentCommentId = Number(req.params.id);
+    const userId = req.userId;
+
+    if (isNaN(parentCommentId)) {
+      return res.status(400).json({ message: "Invalid comment ID" });
+    }
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const replies = await getCommentRepliesService(parentCommentId, userId);
+    res.status(200).json({ replies });
+  } catch (err: any) {
+    res
+      .status(err.statusCode || 500)
+      .json({ message: err.message || "Failed to fetch replies" });
   }
 };
 
@@ -201,7 +263,7 @@ export const getPostRepostsHandler = async (
   }
 };
 
-//update post like content 
+//update post like content
 export const updatePostHandler = async (
   req: AuthenticatedRequest,
   res: Response
@@ -232,7 +294,6 @@ export const updatePostHandler = async (
   }
 };
 
-
 // DELETE POST
 export const deletePostHandler = async (
   req: AuthenticatedRequest,
@@ -256,5 +317,30 @@ export const deletePostHandler = async (
     return res
       .status(err.statusCode || 500)
       .json({ message: err.message || "Failed to delete post" });
+  }
+};
+
+//like on comment
+export const commentLikeHandler = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
+  try {
+    const commentId = Number(req.params.id);
+    const userId = req.userId;
+
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+    if (isNaN(commentId)) {
+      return res.status(400).json({ message: "Invalid comment ID" });
+    }
+
+    const result = await CommentLikeService.toggleLike(commentId, userId);
+    res.status(200).json(result);
+  } catch (err: any) {
+    res
+      .status(err.statusCode || 500)
+      .json({ message: err.message || "Failed to toggle comment like" });
   }
 };

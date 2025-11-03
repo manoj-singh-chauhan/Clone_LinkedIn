@@ -17,6 +17,9 @@ import {
   deletePost,
   Post as PostType,
   RepostWithUser,
+  likeComment,
+  replyToComment,
+  getCommentReplies,
 } from "../../api/Post";
 import PostItem, {
   RepostingPost,
@@ -69,6 +72,12 @@ const Feed: React.FC = () => {
 
   const [editingPost, setEditingPost] = useState<PostType | null>(null);
   const [postToDelete, setPostToDelete] = useState<PostType | null>(null);
+  const [replyingTo, setReplyingTo] = useState<number | null>(null);
+  const [replyText, setReplyText] = useState<Record<number, string>>({});
+  const [replyMap, setReplyMap] = useState<Record<number, PostCommentUser[]>>(
+    {}
+  );
+  const [loadingReplies, setLoadingReplies] = useState<number | null>(null);
 
   const {
     data,
@@ -98,10 +107,10 @@ const Feed: React.FC = () => {
   const { data: commentsData } = useQuery({
     queryKey: ["comments", activeCommentPost],
     queryFn: async () => {
-      if (!activeCommentPost) return [];
-      return await getPostComments(activeCommentPost);
+      if (!activeCommentPost || !user?.id) return [];
+      return await getPostComments(activeCommentPost, Number(user.id));
     },
-    enabled: !!activeCommentPost,
+    enabled: !!activeCommentPost && !!user?.id,
   });
 
   const updatePostMutation = useMutation({
@@ -152,6 +161,74 @@ const Feed: React.FC = () => {
     onError: (error) => {
       console.error("Failed to delete post:", error);
       alert("Error: Could not delete post.");
+    },
+  });
+
+  const likeCommentMutation = useMutation({
+    mutationFn: (commentId: number) => likeComment(commentId),
+    onSuccess: (data, commentId) => {
+      queryClient.setQueryData<PostCommentUser[]>(
+        ["comments", activeCommentPost],
+        (oldComments = []) =>
+          oldComments.map((comment) =>
+            comment.commentId === commentId
+              ? {
+                  ...comment,
+                  likeCount: data.likeCount,
+                  likedByCurrentUser: data.liked,
+                }
+              : comment
+          )
+      );
+
+      setReplyMap((currentMap) => {
+        const newMap = { ...currentMap };
+        for (const parentId in newMap) {
+          newMap[parentId] = newMap[parentId].map((reply) =>
+            reply.commentId === commentId
+              ? {
+                  ...reply,
+                  likeCount: data.likeCount,
+                  likedByCurrentUser: data.liked,
+                }
+              : reply
+          );
+        }
+        return newMap;
+      });
+    },
+    onError: (error) => {
+      console.error("Failed to like comment:", error);
+    },
+  });
+
+  const replyMutation = useMutation({
+    mutationFn: ({
+      parentCommentId,
+      content,
+    }: {
+      parentCommentId: number;
+      content: string;
+    }) => replyToComment(parentCommentId, content),
+
+    onSuccess: (newReply, variables) => {
+      setReplyMap((currentMap) => ({
+        ...currentMap,
+        [variables.parentCommentId]: [
+          ...(currentMap[variables.parentCommentId] || []),
+          newReply as any,
+        ],
+      }));
+
+      setReplyText((prev) => ({ ...prev, [variables.parentCommentId]: "" }));
+      setReplyingTo(null);
+
+      queryClient.invalidateQueries({
+        queryKey: ["comments", activeCommentPost],
+      });
+    },
+    onError: (error) => {
+      console.error("Failed to post reply:", error);
     },
   });
 
@@ -282,9 +359,12 @@ const Feed: React.FC = () => {
       ]);
 
       const optimisticComment: PostCommentUser = {
-        id: Date.now(),
+        commentId: Date.now(), // 👈 Use commentId
         content: text,
         createdAt: new Date().toISOString(),
+        likeCount: 0, // 👈 ADD
+        replyCount: 0, // 👈 ADD
+        likedByCurrentUser: false, // 👈 ADD
         user: {
           id: Number(user?.id) || 0,
           name: user?.name || "You",
@@ -379,10 +459,8 @@ const Feed: React.FC = () => {
     [editingPost, updatePostMutation]
   );
 
-  
   const handleDeletePost = useCallback(
     (postId: number) => {
-      // Find the post from your posts array to pass to the modal
       const post = posts.find((p) => p.id === postId);
       if (post) {
         setPostToDelete(post);
@@ -419,6 +497,53 @@ const Feed: React.FC = () => {
   const handleReportPost = useCallback(() => {
     alert("Post reported");
   }, []);
+
+  const handleLikeComment = useCallback(
+    (commentId: number) => {
+      likeCommentMutation.mutate(commentId);
+    },
+    [likeCommentMutation]
+  );
+
+  const handleReplyChange = useCallback((commentId: number, text: string) => {
+    setReplyText((prev) => ({ ...prev, [commentId]: text }));
+  }, []);
+
+  const handleReplySubmit = useCallback(
+    (parentCommentId: number) => {
+      const content = replyText[parentCommentId]?.trim();
+      if (!content) return;
+      replyMutation.mutate({ parentCommentId, content });
+    },
+    [replyText, replyMutation]
+  );
+
+  const handleToggleReplies = useCallback(
+    async (commentId: number) => {
+      if (replyMap[commentId]) {
+        setReplyMap((currentMap) => {
+          const newMap = { ...currentMap };
+          delete newMap[commentId];
+          return newMap;
+        });
+        return;
+      }
+
+      setLoadingReplies(commentId);
+      try {
+        const replies = await getCommentReplies(commentId);
+        setReplyMap((currentMap) => ({
+          ...currentMap,
+          [commentId]: replies,
+        }));
+      } catch (error) {
+        console.error("Failed to fetch replies:", error);
+      } finally {
+        setLoadingReplies(null);
+      }
+    },
+    [replyMap]
+  );
 
   const memoizedPosts = useMemo(
     () =>
@@ -459,6 +584,15 @@ const Feed: React.FC = () => {
             handleHidePost={handleHidePost}
             handleBlockAuthor={handleBlockAuthor}
             handleReportPost={handleReportPost}
+            handleLikeComment={handleLikeComment}
+            replyingTo={replyingTo}
+            setReplyingTo={setReplyingTo}
+            replyTextMap={replyText}
+            replyMap={replyMap}
+            loadingReplies={loadingReplies}
+            handleReplyChange={handleReplyChange}
+            handleReplySubmit={handleReplySubmit}
+            handleToggleReplies={handleToggleReplies}
           />
         );
       }),
@@ -487,6 +621,14 @@ const Feed: React.FC = () => {
       handleHidePost,
       handleBlockAuthor,
       handleReportPost,
+      handleLikeComment,
+      replyingTo,
+      replyText,
+      replyMap,
+      loadingReplies,
+      handleReplyChange,
+      handleReplySubmit,
+      handleToggleReplies,
     ]
   );
 
