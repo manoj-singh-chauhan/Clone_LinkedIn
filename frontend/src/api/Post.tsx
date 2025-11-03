@@ -3,7 +3,6 @@ import axios from "axios";
 import { AxiosError } from "axios";
 import { APIErrorResponse } from "../types/errors";
 
-
 export interface CreatePostPayload {
   content?: string | null;
   hashtags?: string | null;
@@ -45,7 +44,6 @@ export const createPost = async (
       formData.append("signature", signature);
       formData.append("folder", folder);
 
-      
       // const controller = new AbortController();
       // if (setCancelUpload) {
       //   setCancelUpload(() => controller.abort);
@@ -76,11 +74,11 @@ export const createPost = async (
 
         uploadedBytes += file.size;
         mediaUrls.push(res.data.secure_url);
-      }catch (error: unknown) {
+      } catch (error: unknown) {
         if (error instanceof Error && error.message === "canceled") {
-          // console.log("Upload canceled by user"); 
+          // console.log("Upload canceled by user");
           throw new Error("Upload canceled");
-          // return; 
+          // return;
         } else {
           console.error("Upload failed:", error);
           throw error;
@@ -95,7 +93,6 @@ export const createPost = async (
   const res = await api.post<PostResponse>("/posts", payload);
   return res.data;
 };
-
 
 //get
 export interface AuthorProfile {
@@ -285,8 +282,6 @@ export const getPostComments = async (
   }
 };
 
-
-
 export interface RepostWithUser {
   repostId: number;
   repostComment?: string | null;
@@ -305,4 +300,28 @@ export const getPostReposts = async (
     `/posts/${postId}/reposts`
   );
   return res.data.reposts;
+};
+
+export interface UpdatePostPayload {
+  content: string;
+}
+
+export const updatePost = async (
+  postId: number,
+  data: UpdatePostPayload
+): Promise<Post> => {
+  try {
+    const res = await api.patch<Post>(`/posts/${postId}/postupdate`, data);
+    // console.log(res.data);
+    return res.data;
+  } catch (error) {
+    if (error instanceof AxiosError && error.response) {
+      throw (
+        (error.response.data as APIErrorResponse) || {
+          message: "Failed to update post",
+        }
+      );
+    }
+    throw error;
+  }
 };

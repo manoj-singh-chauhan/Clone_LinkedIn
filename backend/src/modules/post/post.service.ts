@@ -352,3 +352,33 @@ export const getPostRepostsService = async (postId: number) => {
     },
   }));
 };
+
+
+export const updatePostService = async (
+  postId: number,
+  userId: number,
+  content: string
+) => {
+  // 3. WRAP THE LOGIC
+  return withTransaction(async (t) => {
+    const post = await Post.findByPk(postId, { transaction: t });
+
+    if (!post) {
+      const error = new Error("Post not found");
+      (error as any).statusCode = 404;
+      throw error;
+    }
+
+    if (post.userId !== userId) {
+      const error = new Error("You are not authorized to edit this post");
+      (error as any).statusCode = 403;
+      throw error;
+    }
+
+    post.content = content;
+    // 4. PASS THE TRANSACTION TO .save()
+    await post.save({ transaction: t });
+
+    return post.toJSON();
+  });
+};

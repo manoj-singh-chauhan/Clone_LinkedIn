@@ -70,15 +70,25 @@ export const loginUser = async (email: string, password: string) => {
 
   if (!user.isVerified) throw new Error("Please verify your email first");
 
-  if (user.isGoogleLogin) {
-    throw new Error(
-      "This account is linked with Google. Please login using Google."
-    );
+  // if (user.isGoogleLogin) {
+  //   throw new Error(
+  //     "This account is linked with Google. Please login using Google."
+  //   );
+  // }
+  if (!user.password) {
+    if (user.isGoogleLogin) {
+      throw new Error(
+        // "This account was created with Google. Please login using Google."
+        "This email is linked to a Google account. Please continue by selecting 'Login with Google'."
+      );
+    } else {
+      throw new Error("Password not set for this account.");
+    }
   }
   //check
-  if (!user.password) {
-    throw new Error("Password not set for this user");
-  }
+  // if (!user.password) {
+  //   throw new Error("Password not set for this user");
+  // }
   const isMatch = await bcrypt.compare(password, user.password);
   if (!isMatch) throw new Error("Invalid password");
   const token = jwt.sign({ id: user.id, email: user.email }, JWT_SECRET!, {

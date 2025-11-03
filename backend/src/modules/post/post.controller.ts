@@ -6,6 +6,7 @@ import {
   PostRepostService,
   PostLikeService,
   PostCommentService,
+  updatePostService,
 } from "./post.service";
 import "multer";
 import { getPostLikesService } from "./post.service";
@@ -194,5 +195,37 @@ export const getPostRepostsHandler = async (
     res
       .status(err.statusCode || 500)
       .json({ message: err.message || "Failed to fetch reposts" });
+  }
+};
+
+export const updatePostHandler = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
+  try {
+    const postId = Number(req.params.id);
+    const userId = req.userId;
+    const { content } = req.body;
+
+    console.log("frontend data ", req.body);
+
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+    if (isNaN(postId)) {
+      return res.status(400).json({ message: "Invalid post ID" });
+    }
+
+    const updatedPost = await updatePostService(postId, userId, content);
+
+    // console.log("final data ",res);
+
+    return res
+      .status(200)
+      .json({ message: "Post updated successfully", post: updatedPost });
+  } catch (err: any) {
+    return res
+      .status(err.statusCode || 500)
+      .json({ message: err.message || "Failed to update post" });
   }
 };

@@ -9,8 +9,10 @@ import { MdAccountCircle } from "react-icons/md";
 import { FaRegFileAlt } from "react-icons/fa";
 import { BiCommentDetail } from "react-icons/bi";
 import EmojiPicker, { EmojiClickData } from "emoji-picker-react";
-import { BsEmojiSmile } from "react-icons/bs";
+import { BsEmojiSmile, BsThreeDots } from "react-icons/bs";
 import ReactionsBox from "./ReactionsBox";
+import { MdOutlineVerifiedUser } from "react-icons/md";
+import { useAuth } from "../../context/AuthContext";
 
 export interface RepostingPost {
   post: PostType;
@@ -46,11 +48,8 @@ interface PostItemProps {
   activeLikesBoxId: number | null;
   timeSince: (dateString: string) => string;
   handleLike: (postId: number) => void;
-  // handleShowComments: (postId: number) => Promise<void>;
   handleShowComments: (postId: number) => void;
-
   handleCommentChange: (postId: number, text: string) => void;
-  // handleCommentSubmit: (postId: number) => Promise<void>;
   handleCommentSubmit: (postId: number) => Promise<void>;
   handleRepost: (postId: number, comment?: string) => Promise<void>;
   setLightbox: React.Dispatch<
@@ -69,6 +68,7 @@ interface PostItemProps {
   hideRepostButton?: boolean;
   lastPostRef?: (node: HTMLDivElement | null) => void;
   disableRepostCountClick?: boolean;
+  handleEdit: (post: PostType) => void;
 }
 
 const PostItem: React.FC<PostItemProps> = memo(
@@ -98,7 +98,11 @@ const PostItem: React.FC<PostItemProps> = memo(
     lastPostRef,
     hideRepostButton,
     disableRepostCountClick,
+    handleEdit,
   }) => {
+    const { user } = useAuth();
+    const isAuthor = user?.id === post.author.id;
+    const [isMenuOpen, setIsMenuOpen] = useState(false);
     const authorName = post.author?.profile?.name || "Unknown";
     const postDate = post.createdAt ? timeSince(post.createdAt) : "";
     const media = post.media || [];
@@ -113,14 +117,13 @@ const PostItem: React.FC<PostItemProps> = memo(
     const [isExpanded, setIsExpanded] = useState(false);
 
     const renderContentWithHashtags = (text: string) => {
-      const parts = text.split(/(#[a-zA-Z0-9_]+)/g); // detect #hashtags
+      const parts = text.split(/(#[a-zA-Z0-9_]+)/g);
       return parts.map((part, index) => {
         if (part.startsWith("#")) {
           return (
             <span
               key={index}
               className="text-blue-600 font-medium cursor-pointer hover:underline"
-              // onClick={() => console.log("Clicked hashtag:", part)}
             >
               {part}
             </span>
@@ -130,79 +133,95 @@ const PostItem: React.FC<PostItemProps> = memo(
       });
     };
 
-
     return (
       <div
         ref={isLastPost ? lastPostRef : null}
         className="bg-white border border-gray-200 rounded-sm shadow-sm"
       >
         {/* Post Header */}
-        <div className="flex items-start gap-3 mb-3 p-2">
+        <div className="flex items-start gap-3 mb-3 p-2 relative">
           <MdAccountCircle className="w-10 h-10 text-gray-500 rounded-full flex-shrink-0" />
-          <div>
-            <p className="font-semibold text-gray-800">{authorName}</p>
+          <div className="flex-grow">
+            <p className="font-semibold text-gray-800 flex items-center gap-1">
+              {authorName}
+              <MdOutlineVerifiedUser size={15} title="verified user" />
+            </p>
             <p className="text-sm text-gray-500">{postDate} ago</p>
+          </div>
+
+        
+          <div className="flex-shrink-0">
+            <button
+              onClick={() => setIsMenuOpen(!isMenuOpen)}
+              className="p-2 rounded-full hover:bg-gray-100"
+              aria-label="Post options"
+            >
+              <BsThreeDots size={20} className="text-gray-600" />
+            </button>
+
+            
+            {isMenuOpen && (
+              <div
+                className="absolute top-12 right-2 bg-white border border-gray-200 rounded-md shadow-lg z-10 w-48" // Made menu wider
+                onMouseLeave={() => setIsMenuOpen(false)}
+              >
+               
+                {isAuthor && (
+                  <button
+                    onClick={() => {
+                      handleEdit(post);
+                      setIsMenuOpen(false);
+                    }}
+                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                  >
+                    Edit post
+                  </button>
+                )}
+
+                
+                {!isAuthor && (
+                  <button
+                    // onClick={() => alert(`Following ${authorName}`)}
+                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                  >
+                    Follow {authorName}
+                  </button>
+                  
+                )}
+                {!isAuthor && (
+                  <button
+                    // onClick={() => alert(`Following ${authorName}`)}
+                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                  >
+                    Report post
+                  </button>
+                  
+                )}
+              </div>
+            )}
           </div>
         </div>
 
-        {/* {post.content && (
-          // <div className="text-gray-800 whitespace-pre-wrap break-words leading-relaxed mb-4 text-base">
-          <div className="text-gray-800 whitespace-pre-wrap break-words leading-relaxed mb-4 text-sm">
-
-            {post.content}
-          </div>
-        )} */}
-
-        {/* {post.content && (() => {
-          const MAX_LENGTH = 100; // adjust length as needed
-          const isLong = post.content.length > MAX_LENGTH;
-          const displayText =
-            isExpanded || !isLong
-              ? post.content
-              : post.content.slice(0, MAX_LENGTH) + "...";
-
-          return (
-            <div className="text-gray-800 whitespace-pre-wrap break-words leading-relaxed mb-4 text-base px-2">
-              {displayText}
-              {isLong && (
-                <button
-                  onClick={() => setIsExpanded(!isExpanded)}
-                  className="text-blue-600 font-semibold ml-1 hover:underline"
-                >
-                  {isExpanded ? "less" : "more"}
-                </button>
-              )}
-            </div>
-          );
-        })()} */}
-
+        
         {post.content &&
           (() => {
             const MAX_VISIBLE_CHARS = 200;
-            const MAX_NEWLINES = 4; 
-
-            // Split content into lines and limit lines first
+            const MAX_NEWLINES = 4;
             const lines = post.content.split("\n");
             const visibleLines = lines.slice(0, MAX_NEWLINES);
             const visibleText = visibleLines.join("\n");
-
-            // Then limit characters
             const trimmedText =
               visibleText.length > MAX_VISIBLE_CHARS
                 ? visibleText.slice(0, MAX_VISIBLE_CHARS) + "..."
                 : visibleText;
-
             const shouldTruncate =
               post.content.length > MAX_VISIBLE_CHARS ||
               lines.length > MAX_NEWLINES;
-
             const displayText = isExpanded ? post.content : trimmedText;
 
             return (
               <div className="text-gray-800 whitespace-pre-wrap break-words leading-relaxed mb-4 text-base px-2">
-                {/* {displayText} */}
                 {renderContentWithHashtags(displayText)}
-
                 {shouldTruncate && (
                   <button
                     onClick={() => setIsExpanded(!isExpanded)}
@@ -215,14 +234,13 @@ const PostItem: React.FC<PostItemProps> = memo(
             );
           })()}
 
-        {/* Media Section */}
-        {/* <div className="-mx-1"> */}
+        
         <PostMediaGrid
           media={media}
           onClick={(index) => setLightbox({ media, index, post })}
         />
-        {/* </div> */}
 
+        
         <div className="flex justify-between items-center text-sm text-gray-600 border-t border-gray-100 pt-3 mt-3 px-2 relative">
           <span
             className="cursor-pointer hover:text-blue-600 relative"
@@ -238,7 +256,6 @@ const PostItem: React.FC<PostItemProps> = memo(
               />
             )}
           </span>
-
           <div className="flex gap-4">
             <span
               className="cursor-pointer hover:text-blue-600"
@@ -247,7 +264,6 @@ const PostItem: React.FC<PostItemProps> = memo(
               <span className="font-semibold">{post.commentCount}</span>{" "}
               Comments
             </span>
-
             <span
               className={
                 disableRepostCountClick
@@ -265,7 +281,7 @@ const PostItem: React.FC<PostItemProps> = memo(
           </div>
         </div>
 
-        {/* Action Buttons */}
+        
         <div className="flex justify-around text-gray-600 mt-2 border-t border-gray-100 pt-2">
           <button
             onClick={() => handleLike(post.id)}
@@ -276,7 +292,6 @@ const PostItem: React.FC<PostItemProps> = memo(
             <AiOutlineLike size={20} />
             <span className="hidden sm:inline">Like</span>
           </button>
-
           <button
             onClick={() => handleShowComments(post.id)}
             className="flex items-center gap-1 p-2 rounded-full hover:bg-gray-100"
@@ -284,7 +299,6 @@ const PostItem: React.FC<PostItemProps> = memo(
             <AiOutlineComment size={20} />
             <span className="hidden sm:inline">Comment</span>
           </button>
-
           {!hideRepostButton && (
             <div className="relative flex flex-col items-center gap-1">
               <button
@@ -300,7 +314,6 @@ const PostItem: React.FC<PostItemProps> = memo(
                 <AiOutlineRetweet size={20} />
                 <span className="hidden sm:inline">Repost</span>
               </button>
-
               {isRepostDropdownOpen && (
                 <div
                   className="absolute top-10 right-0 bg-white border border-gray-200 rounded-xl shadow-lg w-64 z-20 overflow-hidden"
@@ -323,7 +336,6 @@ const PostItem: React.FC<PostItemProps> = memo(
                       Create a new post with this post attached
                     </p>
                   </button>
-
                   <button
                     onClick={() => handleRepost(post.id)}
                     className="flex flex-col items-start w-full px-4 py-3 text-left hover:bg-gray-50 transition-colors border-t border-gray-100"
@@ -344,32 +356,32 @@ const PostItem: React.FC<PostItemProps> = memo(
           )}
         </div>
 
-        {/* Comments Section */}
         {isCommentSectionOpen && (
           <div className="mt-4 space-y-3 px-2">
             <div className="flex gap-2 items-start">
               <MdAccountCircle className="w-10 h-10 text-gray-400 rounded-full flex-shrink-0" />
               <div className="flex-1 flex flex-col relative">
-                  <div className="flex items-center border border-gray-300 rounded-full px-3 py-1">
-                    <input
-                      type="text"
-                      placeholder="Write a comment..."
-                      value={commentText}
-                      onChange={(e) => handleCommentChange(post.id, e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") handleCommentSubmit(post.id);
-                      }}
-                      className="flex-1 outline-none py-2 px-1 rounded-full"
-                    />
-                    <BsEmojiSmile
-                      size={22}
-                      className="text-gray-500 cursor-pointer hover:text-yellow-500 ml-2"
-                      onClick={() =>
-                        setShowEmojiPickerFor(showEmojiPicker ? null : post.id)
-                      }
-                    />
-                  </div>
-
+                <div className="flex items-center border border-gray-300 rounded-full px-3 py-1">
+                  <input
+                    type="text"
+                    placeholder="Write a comment..."
+                    value={commentText}
+                    onChange={(e) =>
+                      handleCommentChange(post.id, e.target.value)
+                    }
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleCommentSubmit(post.id);
+                    }}
+                    className="flex-1 outline-none py-2 px-1 rounded-full"
+                  />
+                  <BsEmojiSmile
+                    size={22}
+                    className="text-gray-500 cursor-pointer hover:text-yellow-500 ml-2"
+                    onClick={() =>
+                      setShowEmojiPickerFor(showEmojiPicker ? null : post.id)
+                    }
+                  />
+                </div>
                 {showEmojiPicker && (
                   <div className="absolute -right-2 -top-[400px] z-50">
                     <EmojiPicker
@@ -379,28 +391,16 @@ const PostItem: React.FC<PostItemProps> = memo(
                     />
                   </div>
                 )}
-                  {commentText.trim() && (
-                    <button
-                      className="mt-1 bg-blue-600 text-white px-4 py-1 rounded-full text-sm hover:bg-blue-700 transition self-end"
-                      onClick={() => handleCommentSubmit(post.id)}
-                    >
-                      Send
-                    </button>
-                  )}
-                </div>
-
-            </div>
-
-            {/* {showEmojiPicker && (
-              <div className="absolute z-50 bottom-12 left-0">
-                <EmojiPicker
-                  onEmojiClick={handleEmojiClick}
-                  width={300}
-                  height={350}
-                />
+                {commentText.trim() && (
+                  <button
+                    className="mt-1 bg-blue-600 text-white px-4 py-1 rounded-full text-sm hover:bg-blue-700 transition self-end"
+                    onClick={() => handleCommentSubmit(post.id)}
+                  >
+                    Send
+                  </button>
+                )}
               </div>
-            )} */}
-
+            </div>
             <div className="space-y-3 mt-2">
               {(comments || []).map((comment) => (
                 <div
@@ -428,8 +428,6 @@ const PostItem: React.FC<PostItemProps> = memo(
     );
   }
 );
-
-export default PostItem;
 
 export const PostMediaGrid: React.FC<{
   media: MediaItem[];
@@ -518,8 +516,6 @@ export const PostMediaGrid: React.FC<{
 
   return (
     <div className={`mb-4 grid ${grid} gap-[2px] overflow-hidden`}>
-      {/* <div className={`mb-4 grid ${grid} gap-0`}> */}
-
       {media
         .filter((m) => m.type !== "document")
         .slice(0, 4)
@@ -530,22 +526,12 @@ export const PostMediaGrid: React.FC<{
             onClick={() => onClick?.(i)}
           >
             {m.type === "video" ? (
-              // <video
-              //   src={m.url}
-              //   controls
-              //   className="w-full h-full object-cover"
-              // />
               <video
                 src={m.url}
                 controls
                 className="w-full h-full object-cover block"
               />
             ) : (
-              // <img
-              //   src={m.url}
-              //   alt={`media-${i}`}
-              //   className="w-full h-full object-cover"
-              // />
               <img
                 src={m.url}
                 alt={`media-${i}`}
@@ -562,3 +548,5 @@ export const PostMediaGrid: React.FC<{
     </div>
   );
 };
+
+export default PostItem;

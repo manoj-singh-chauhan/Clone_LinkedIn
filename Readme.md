@@ -1,8 +1,6 @@
 git add.
 git commit -m "first commit"
 git push
-tcs codevita
-
 
 
 
@@ -17,5 +15,4 @@ post on backgound
 
 
 
-
-
+use more lees if discription is tooo long 

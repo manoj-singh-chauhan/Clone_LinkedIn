@@ -8,6 +8,7 @@ import {
   getPostLikesHandler,
   getPostCommentsHandler,
   getPostRepostsHandler,
+  updatePostHandler,
 } from "./post.controller";
 import { authenticate } from "../../middlewares/auth.middleware";
 import cloudinary from "../../config/cloudinary.config";
@@ -41,5 +42,10 @@ router.post("/:id/repost", authenticate, repostPostHandler);
 router.get("/:id/likes", authenticate, getPostLikesHandler);
 router.get("/:id/comments", authenticate, getPostCommentsHandler);
 router.get("/:id/reposts", authenticate, getPostRepostsHandler);
+// post.routes.ts
+
+// CORRECT
+// CORRECT
+router.patch("/:id/postupdate", authenticate, updatePostHandler);
 
 export default router;

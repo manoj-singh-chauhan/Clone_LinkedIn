@@ -41,6 +41,26 @@ const MediaLightbox: React.FC<MediaLightboxProps> = ({
     setCurrentIndex((prev) => (prev === media.length - 1 ? 0 : prev + 1));
   };
 
+  const renderContentWithHashtags = (text: string | null): React.ReactNode => {
+    if (!text) return null;
+
+    const parts = text.split(/(#[a-zA-Z0-9_]+)/g);
+
+    return parts.map((part, index) => {
+      if (part.startsWith("#")) {
+        return (
+          <span
+            key={index}
+            className="text-blue-600 font-medium cursor-pointer hover:underline"
+          >
+            {part}
+          </span>
+        );
+      }
+      return part;
+    });
+  };
+
   return (
     <div className="fixed inset-0 z-50 bg-gray-900 bg-opacity-70 flex justify-center items-center overflow-auto">
       <button
@@ -82,19 +102,26 @@ const MediaLightbox: React.FC<MediaLightboxProps> = ({
                 onClick={nextMedia}
                 className="absolute right-2 top-1/2 -translate-y-1/2 text-white text-3xl px-2"
               >
-                < FaArrowRight />
+                <FaArrowRight />
               </button>
             </>
           )}
         </div>
 
-        {/* Comments */}
-         <div className="w-full md:w-1/3 p-4 flex flex-col overflow-auto">
+        {/* Post Info & Comments */}
+        <div className="w-full md:w-1/3 p-4 flex flex-col overflow-auto">
           <div className="mb-4">
             <p className="font-semibold text-gray-800">
               {post.author?.profile?.name || "Unknown"}
             </p>
-            <p className="text-gray-700 mt-1">{post.content}</p>
+            {/* THIS IS THE CORRECTED LINE:
+              - Uses renderContentWithHashtags
+              - Adds whitespace-pre-wrap to respect line breaks
+              - Adds break-words to prevent long text from overflowing
+            */}
+            <p className="text-gray-700 mt-1 whitespace-pre-wrap break-words">
+              {renderContentWithHashtags(post.content)}
+            </p>
           </div>
 
           <div className="flex-1 overflow-y-auto">

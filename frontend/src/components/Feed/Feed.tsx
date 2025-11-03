@@ -13,6 +13,7 @@ import {
   commentPost,
   getPostComments,
   getPostReposts,
+  updatePost,
   Post as PostType,
   RepostWithUser,
 } from "../../api/Post";
@@ -32,6 +33,7 @@ import {
   useQuery,
   useMutation,
 } from "@tanstack/react-query";
+import PostDialog from "../PostDialogs/PostDialog";
 
 const Feed: React.FC = () => {
   const { user } = useAuth();
@@ -61,10 +63,10 @@ const Feed: React.FC = () => {
   const [repostedPosts, setRepostedPosts] = useState<Set<number>>(new Set());
   const [repostPending, setRepostPending] = useState<Set<number>>(new Set());
   const observerRef = useRef<IntersectionObserver | null>(null);
-
   const limit = 5;
 
-  
+  const [editingPost, setEditingPost] = useState<PostType | null>(null);
+
   const {
     data,
     fetchNextPage,
@@ -90,7 +92,6 @@ const Feed: React.FC = () => {
   });
 
   const posts = useMemo(() => data?.pages.flat() || [], [data]);
-
   const { data: commentsData } = useQuery({
     queryKey: ["comments", activeCommentPost],
     queryFn: async () => {
@@ -100,7 +101,34 @@ const Feed: React.FC = () => {
     enabled: !!activeCommentPost,
   });
 
-  
+  const updatePostMutation = useMutation({
+    mutationFn: ({ postId, content }: { postId: number; content: string }) =>
+      updatePost(postId, { content }),
+    onSuccess: (updatedPost) => {
+      queryClient.invalidateQueries({ queryKey: ["posts"] });
+
+      queryClient.setQueryData<InfiniteData<PostType[]>>(
+        ["posts"],
+        (oldData) => {
+          if (!oldData) return oldData;
+          return {
+            ...oldData,
+            pages: oldData.pages.map((page) =>
+              page.map((post) =>
+                post.id === updatedPost.id ? updatedPost : post
+              )
+            ),
+          };
+        }
+      );
+
+      setEditingPost(null);
+    },
+    onError: (error) => {
+      console.error("Failed to update post:", error);
+    },
+  });
+
   useEffect(() => {
     if (posts.length > 0) {
       setLikedPosts(() => {
@@ -210,54 +238,12 @@ const Feed: React.FC = () => {
     setCommentTextMap((prev) => ({ ...prev, [postId]: text }));
   }, []);
 
-  // const commentMutation = useMutation({
-  //   mutationFn: async ({ postId, text }: { postId: number; text: string }) => {
-  //     const res = await commentPost(postId, text);
-  //     return res.comment;
-  //   },
-  //   onMutate: async ({ postId, text }) => {
-  //     await queryClient.cancelQueries({ queryKey: ["comments", postId] });
-
-  //     const previousComments = queryClient.getQueryData<PostCommentUser[]>([
-  //       "comments",
-  //       postId,
-  //     ]);
-
-  //     const optimisticComment: PostCommentUser = {
-  //       id: Date.now(),
-  //       content: text,
-  //       createdAt: new Date().toISOString(),
-  //       user: {
-  //         id: Number(user?.id) || 0,
-  //         name: user?.name || "You",
-  //         email: user?.email || "",
-  //       },
-  //     };
-
-  //     queryClient.setQueryData<PostCommentUser[]>(
-  //       ["comments", postId],
-  //       (old = []) => [optimisticComment, ...old]
-  //     );
-
-  //     return { previousComments };
-  //   },
-  //   onError: (err, variables, context) => {
-  //     if (context?.previousComments) {
-  //       queryClient.setQueryData(["comments", variables.postId], context.previousComments);
-  //     }
-  //   },
-  //   onSettled: (data, error, variables) => {
-  //     queryClient.invalidateQueries({ queryKey: ["comments", variables.postId] });
-  //   },
-  // });
-
   const commentMutation = useMutation({
     mutationFn: async ({ postId, text }: { postId: number; text: string }) => {
       const res = await commentPost(postId, text);
       return res.comment;
     },
     onMutate: async ({ postId, text }) => {
-      // stop ongoing refetches
       await queryClient.cancelQueries({ queryKey: ["comments", postId] });
       await queryClient.cancelQueries({ queryKey: ["posts"] });
 
@@ -320,13 +306,6 @@ const Feed: React.FC = () => {
     },
   });
 
-  // const handleCommentSubmit = (postId: number) => {
-  //   const text = commentTextMap[postId]?.trim();
-  //   if (!text) return;
-  //   setCommentTextMap((prev) => ({ ...prev, [postId]: "" }));
-  //   commentMutation.mutate({ postId, text });
-  // };
-
   const handleCommentSubmit = React.useCallback(
     async (postId: number) => {
       const text = commentTextMap[postId]?.trim();
@@ -354,6 +333,25 @@ const Feed: React.FC = () => {
       setRepostLoading(false);
     }
   }, []);
+
+  const handleEditClick = useCallback((post: PostType) => {
+    setEditingPost(post);
+  }, []);
+
+  const handleEditClose = useCallback(() => {
+    setEditingPost(null);
+  }, []);
+
+  const handleEditSubmit = useCallback(
+    (newContent: string) => {
+      if (!editingPost) return;
+      updatePostMutation.mutate({
+        postId: editingPost.id,
+        content: newContent,
+      });
+    },
+    [editingPost, updatePostMutation]
+  );
 
   const memoizedPosts = useMemo(
     () =>
@@ -387,38 +385,17 @@ const Feed: React.FC = () => {
             setIsModalOpen={setIsModalOpen}
             isLastPost={isLastPost}
             lastPostRef={lastPostRef}
+            handleEdit={handleEditClick}
           />
         );
       }),
-    // [
-    //   posts,
-    //   likedPosts,
-    //   repostedPosts,
-    //   activeCommentPost,
-    //   commentTextMap,
-    //   showEmojiPickerFor,
-    //   reposting,
-    //   activeLikesBox,
-    //   timeSince,
-    //   handleLike,
-    //   handleShowComments,
-    //   handleCommentChange,
-    //   handleCommentSubmit,
-    //   handleRepost,
-    //   handleShowReposts,
-    //   setLightbox,
-    //   setActiveLikesBox,
-    //   setShowEmojiPickerFor,
-    //   setReposting,
-    //   setIsModalOpen,
-    //   lastPostRef,
-    // ]
     [
       posts,
       likedPosts,
       repostedPosts,
       activeCommentPost,
       commentTextMap,
+      commentsData,
       showEmojiPickerFor,
       reposting,
       activeLikesBox,
@@ -429,13 +406,8 @@ const Feed: React.FC = () => {
       handleCommentSubmit,
       handleRepost,
       handleShowReposts,
-      setLightbox,
-      setActiveLikesBox,
-      setShowEmojiPickerFor,
-      setReposting,
-      setIsModalOpen,
+      handleEditClick,
       lastPostRef,
-      commentsData,
     ]
   );
 
@@ -491,18 +463,23 @@ const Feed: React.FC = () => {
               showEmojiPicker: showEmojiPickerFor === repostModalPost.id,
               activeLikesBoxId: activeLikesBox,
               handleLike,
-              // handleShowComments,
-              // handleCommentChange,
-              // handleCommentSubmit,
               handleRepost,
               handleShowReposts,
-              // setLightbox,
-              // setActiveLikesBox,
               setShowEmojiPickerFor,
               setReposting,
               setIsModalOpen,
               hideRepostButton: true,
             }}
+          />
+        )}
+
+        {editingPost && (
+          <PostDialog
+            close={handleEditClose}
+            onSubmit={handleEditSubmit}
+            isEditing={true}
+            initialContent={editingPost.content || ""}
+            initialMedia={editingPost.media}
           />
         )}
       </Suspense>
