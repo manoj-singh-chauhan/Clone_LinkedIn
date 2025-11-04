@@ -4,80 +4,34 @@ import React, {
   Suspense,
   useMemo,
   useRef,
-  useEffect,
+  lazy,
 } from "react";
 import {
   fetchAllPosts,
-  likePost,
-  repostPost,
-  commentPost,
-  getPostComments,
-  getPostReposts,
+  Post as PostType,
   updatePost,
   deletePost,
-  Post as PostType,
-  RepostWithUser,
-  likeComment,
-  replyToComment,
-  getCommentReplies,
 } from "../../api/Post";
-import PostItem, {
-  RepostingPost,
-  PostCommentUser,
-  MediaItem,
-} from "./PostItem";
-import { useAuth } from "../../context/AuthContext";
-import RepostModal from "./RepostModal";
-import MediaLightbox from "./MediaLightbox";
-import RepostDialog from "./RepostDialog";
+import PostItem from "./PostItem";
+// import { useAuth } from "../../context/AuthContext";
 import {
   useInfiniteQuery,
   useQueryClient,
   InfiniteData,
-  useQuery,
   useMutation,
 } from "@tanstack/react-query";
-import PostDialog from "../PostDialogs/PostDialog";
-import DeleteConfirmModal from "./DeleteConfirmModal";
+
+const PostDialog = lazy(() => import("../PostDialogs/PostDialog"));
+const DeleteConfirmModal = lazy(() => import("./DeleteConfirmModal"));
 
 const Feed: React.FC = () => {
-  const { user } = useAuth();
+  // const { user } = useAuth();
   const queryClient = useQueryClient();
-
-  const [activeCommentPost, setActiveCommentPost] = useState<number | null>(
-    null
-  );
-  const [commentTextMap, setCommentTextMap] = useState<Record<number, string>>(
-    {}
-  );
-  const [reposting, setReposting] = useState<RepostingPost | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState<PostType | null>(null);
-  const [lightbox, setLightbox] = useState<{
-    media: MediaItem[];
-    index: number;
-    post: PostType;
-  } | null>(null);
-  const [showEmojiPickerFor, setShowEmojiPickerFor] = useState<number | null>(
-    null
-  );
-  const [activeLikesBox, setActiveLikesBox] = useState<number | null>(null);
-  const [repostModalPost, setRepostModalPost] = useState<PostType | null>(null);
-  const [repostList, setRepostList] = useState<RepostWithUser[]>([]);
-  const [repostLoading, setRepostLoading] = useState(false);
-  const [likedPosts, setLikedPosts] = useState<Set<number>>(new Set());
-  const [repostedPosts, setRepostedPosts] = useState<Set<number>>(new Set());
-  const [repostPending, setRepostPending] = useState<Set<number>>(new Set());
   const observerRef = useRef<IntersectionObserver | null>(null);
   const limit = 5;
 
   const [editingPost, setEditingPost] = useState<PostType | null>(null);
   const [postToDelete, setPostToDelete] = useState<PostType | null>(null);
-  const [replyingTo, setReplyingTo] = useState<number | null>(null);
-  const [replyText, setReplyText] = useState<Record<number, string>>({});
-  const [replyMap, setReplyMap] = useState<Record<number, PostCommentUser[]>>(
-    {}
-  );
-  const [loadingReplies, setLoadingReplies] = useState<number | null>(null);
 
   const {
     data,
@@ -104,21 +58,12 @@ const Feed: React.FC = () => {
   });
 
   const posts = useMemo(() => data?.pages.flat() || [], [data]);
-  const { data: commentsData } = useQuery({
-    queryKey: ["comments", activeCommentPost],
-    queryFn: async () => {
-      if (!activeCommentPost || !user?.id) return [];
-      return await getPostComments(activeCommentPost, Number(user.id));
-    },
-    enabled: !!activeCommentPost && !!user?.id,
-  });
 
   const updatePostMutation = useMutation({
     mutationFn: ({ postId, content }: { postId: number; content: string }) =>
       updatePost(postId, { content }),
-    onSuccess: (updatedPost) => {
-      queryClient.invalidateQueries({ queryKey: ["posts"] });
 
+    onSuccess: (updatedPost) => {
       queryClient.setQueryData<InfiniteData<PostType[]>>(
         ["posts"],
         (oldData) => {
@@ -133,9 +78,10 @@ const Feed: React.FC = () => {
           };
         }
       );
-
+      queryClient.invalidateQueries({ queryKey: ["posts"] });
       setEditingPost(null);
     },
+
     onError: (error) => {
       console.error("Failed to update post:", error);
     },
@@ -144,7 +90,6 @@ const Feed: React.FC = () => {
   const deletePostMutation = useMutation({
     mutationFn: (postId: number) => deletePost(postId),
     onSuccess: (data, postId) => {
-      // console.log(data.message);
       queryClient.setQueryData<InfiniteData<PostType[]>>(
         ["posts"],
         (oldData) => {
@@ -160,97 +105,8 @@ const Feed: React.FC = () => {
     },
     onError: (error) => {
       console.error("Failed to delete post:", error);
-      alert("Error: Could not delete post.");
     },
   });
-
-  const likeCommentMutation = useMutation({
-    mutationFn: (commentId: number) => likeComment(commentId),
-    onSuccess: (data, commentId) => {
-      queryClient.setQueryData<PostCommentUser[]>(
-        ["comments", activeCommentPost],
-        (oldComments = []) =>
-          oldComments.map((comment) =>
-            comment.commentId === commentId
-              ? {
-                  ...comment,
-                  likeCount: data.likeCount,
-                  likedByCurrentUser: data.liked,
-                }
-              : comment
-          )
-      );
-
-      setReplyMap((currentMap) => {
-        const newMap = { ...currentMap };
-        for (const parentId in newMap) {
-          newMap[parentId] = newMap[parentId].map((reply) =>
-            reply.commentId === commentId
-              ? {
-                  ...reply,
-                  likeCount: data.likeCount,
-                  likedByCurrentUser: data.liked,
-                }
-              : reply
-          );
-        }
-        return newMap;
-      });
-    },
-    onError: (error) => {
-      console.error("Failed to like comment:", error);
-    },
-  });
-
-  const replyMutation = useMutation({
-    mutationFn: ({
-      parentCommentId,
-      content,
-    }: {
-      parentCommentId: number;
-      content: string;
-    }) => replyToComment(parentCommentId, content),
-
-    onSuccess: (newReply, variables) => {
-      setReplyMap((currentMap) => ({
-        ...currentMap,
-        [variables.parentCommentId]: [
-          ...(currentMap[variables.parentCommentId] || []),
-          newReply as any,
-        ],
-      }));
-
-      setReplyText((prev) => ({ ...prev, [variables.parentCommentId]: "" }));
-      setReplyingTo(null);
-
-      queryClient.invalidateQueries({
-        queryKey: ["comments", activeCommentPost],
-      });
-    },
-    onError: (error) => {
-      console.error("Failed to post reply:", error);
-    },
-  });
-
-  useEffect(() => {
-    if (posts.length > 0) {
-      setLikedPosts(() => {
-        const newSet = new Set<number>();
-        posts.forEach((p) => {
-          if (p.likedByCurrentUser) newSet.add(p.id);
-        });
-        return newSet;
-      });
-
-      setRepostedPosts(() => {
-        const newSet = new Set<number>();
-        posts.forEach((p) => {
-          if (p.repostedByCurrentUser) newSet.add(p.id);
-        });
-        return newSet;
-      });
-    }
-  }, [posts]);
 
   const lastPostRef = useCallback(
     (node: HTMLDivElement | null) => {
@@ -287,159 +143,6 @@ const Feed: React.FC = () => {
     return "0s";
   }, []);
 
-  const handleLike = useCallback(
-    async (postId: number) => {
-      if (!user) return;
-      try {
-        const data = await likePost(postId);
-        queryClient.invalidateQueries({ queryKey: ["posts"] });
-        setLikedPosts((prev) => {
-          const newSet = new Set(prev);
-          if (data.liked) newSet.add(postId);
-          else newSet.delete(postId);
-          return newSet;
-        });
-      } catch (err) {
-        console.error(err);
-      }
-    },
-    [user, queryClient]
-  );
-
-  const handleRepost = useCallback(
-    async (postId: number, comment?: string) => {
-      if (!user || repostPending.has(postId)) return;
-      setRepostPending((prev) => new Set(prev).add(postId));
-      try {
-        const data = await repostPost(postId, comment);
-        queryClient.invalidateQueries({ queryKey: ["posts"] });
-        if (data.reposted)
-          setRepostedPosts((prev) => new Set(prev).add(postId));
-        setReposting(null);
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setRepostPending((prev) => {
-          const newSet = new Set(prev);
-          newSet.delete(postId);
-          return newSet;
-        });
-      }
-    },
-    [user, repostPending, queryClient]
-  );
-
-  const handleRepostFromModal = useCallback(
-    async (postToRepost: PostType, thought: string) => {
-      await handleRepost(postToRepost.id, thought?.trim() || "");
-      setIsModalOpen(null);
-    },
-    [handleRepost]
-  );
-
-  const handleCommentChange = useCallback((postId: number, text: string) => {
-    setCommentTextMap((prev) => ({ ...prev, [postId]: text }));
-  }, []);
-
-  const commentMutation = useMutation({
-    mutationFn: async ({ postId, text }: { postId: number; text: string }) => {
-      const res = await commentPost(postId, text);
-      return res.comment;
-    },
-    onMutate: async ({ postId, text }) => {
-      await queryClient.cancelQueries({ queryKey: ["comments", postId] });
-      await queryClient.cancelQueries({ queryKey: ["posts"] });
-
-      const previousComments = queryClient.getQueryData<PostCommentUser[]>([
-        "comments",
-        postId,
-      ]);
-      const previousPosts = queryClient.getQueryData<InfiniteData<PostType[]>>([
-        "posts",
-      ]);
-
-      const optimisticComment: PostCommentUser = {
-        commentId: Date.now(), // 👈 Use commentId
-        content: text,
-        createdAt: new Date().toISOString(),
-        likeCount: 0, // 👈 ADD
-        replyCount: 0, // 👈 ADD
-        likedByCurrentUser: false, // 👈 ADD
-        user: {
-          id: Number(user?.id) || 0,
-          name: user?.name || "You",
-          email: user?.email || "",
-        },
-      };
-
-      queryClient.setQueryData<PostCommentUser[]>(
-        ["comments", postId],
-        (old = []) => [optimisticComment, ...old]
-      );
-
-      if (previousPosts) {
-        const newPages = previousPosts.pages.map((page) =>
-          page.map((p) =>
-            p.id === postId
-              ? { ...p, commentCount: (p.commentCount || 0) + 1 }
-              : p
-          )
-        );
-        queryClient.setQueryData(["posts"], {
-          ...previousPosts,
-          pages: newPages,
-        });
-      }
-
-      return { previousComments, previousPosts };
-    },
-    onError: (err, variables, context) => {
-      if (context?.previousComments) {
-        queryClient.setQueryData(
-          ["comments", variables.postId],
-          context.previousComments
-        );
-      }
-      if (context?.previousPosts) {
-        queryClient.setQueryData(["posts"], context.previousPosts);
-      }
-    },
-    onSettled: (data, error, variables) => {
-      queryClient.invalidateQueries({
-        queryKey: ["comments", variables.postId],
-      });
-      queryClient.invalidateQueries({ queryKey: ["posts"] });
-    },
-  });
-
-  const handleCommentSubmit = React.useCallback(
-    async (postId: number) => {
-      const text = commentTextMap[postId]?.trim();
-      if (!text) return;
-
-      setCommentTextMap((prev) => ({ ...prev, [postId]: "" }));
-      await commentMutation.mutateAsync({ postId, text });
-    },
-    [commentTextMap, commentMutation]
-  );
-
-  const handleShowComments = useCallback((postId: number) => {
-    setActiveCommentPost((prev) => (prev === postId ? null : postId));
-  }, []);
-
-  const handleShowReposts = useCallback(async (post: PostType) => {
-    setRepostModalPost(post);
-    setRepostLoading(true);
-    try {
-      const reposts = await getPostReposts(post.id);
-      setRepostList(reposts);
-    } catch {
-      setRepostList([]);
-    } finally {
-      setRepostLoading(false);
-    }
-  }, []);
-
   const handleEditClick = useCallback((post: PostType) => {
     setEditingPost(post);
   }, []);
@@ -459,15 +162,9 @@ const Feed: React.FC = () => {
     [editingPost, updatePostMutation]
   );
 
-  const handleDeletePost = useCallback(
-    (postId: number) => {
-      const post = posts.find((p) => p.id === postId);
-      if (post) {
-        setPostToDelete(post);
-      }
-    },
-    [posts]
-  );
+  const handleDeleteClick = useCallback((post: PostType) => {
+    setPostToDelete(post);
+  }, []);
 
   const onConfirmDelete = () => {
     if (postToDelete) {
@@ -475,162 +172,6 @@ const Feed: React.FC = () => {
       setPostToDelete(null);
     }
   };
-
-  const handleCopyLink = useCallback((postId: number) => {
-    const postUrl = `${window.location.origin}/home/post/${postId}`;
-    navigator.clipboard.writeText(postUrl);
-    alert("Link copied to clipboard!");
-  }, []);
-
-  const handleFollowAuthor = useCallback(() => {
-    alert("Following");
-  }, []);
-
-  const handleHidePost = useCallback(() => {
-    alert("Post hidden");
-  }, []);
-
-  const handleBlockAuthor = useCallback(() => {
-    alert("Author blocked");
-  }, []);
-
-  const handleReportPost = useCallback(() => {
-    alert("Post reported");
-  }, []);
-
-  const handleLikeComment = useCallback(
-    (commentId: number) => {
-      likeCommentMutation.mutate(commentId);
-    },
-    [likeCommentMutation]
-  );
-
-  const handleReplyChange = useCallback((commentId: number, text: string) => {
-    setReplyText((prev) => ({ ...prev, [commentId]: text }));
-  }, []);
-
-  const handleReplySubmit = useCallback(
-    (parentCommentId: number) => {
-      const content = replyText[parentCommentId]?.trim();
-      if (!content) return;
-      replyMutation.mutate({ parentCommentId, content });
-    },
-    [replyText, replyMutation]
-  );
-
-  const handleToggleReplies = useCallback(
-    async (commentId: number) => {
-      if (replyMap[commentId]) {
-        setReplyMap((currentMap) => {
-          const newMap = { ...currentMap };
-          delete newMap[commentId];
-          return newMap;
-        });
-        return;
-      }
-
-      setLoadingReplies(commentId);
-      try {
-        const replies = await getCommentReplies(commentId);
-        setReplyMap((currentMap) => ({
-          ...currentMap,
-          [commentId]: replies,
-        }));
-      } catch (error) {
-        console.error("Failed to fetch replies:", error);
-      } finally {
-        setLoadingReplies(null);
-      }
-    },
-    [replyMap]
-  );
-
-  const memoizedPosts = useMemo(
-    () =>
-      posts.map((post, index) => {
-        const isLastPost = index === posts.length - 1;
-        return (
-          <PostItem
-            key={post.id}
-            post={post}
-            isLiked={likedPosts.has(post.id)}
-            isReposted={repostedPosts.has(post.id)}
-            isCommentSectionOpen={activeCommentPost === post.id}
-            commentText={commentTextMap[post.id] || ""}
-            comments={activeCommentPost === post.id ? commentsData || [] : []}
-            showEmojiPicker={showEmojiPickerFor === post.id}
-            isRepostDropdownOpen={
-              reposting?.post.id === post.id && reposting.openDropdown
-            }
-            activeLikesBoxId={activeLikesBox}
-            timeSince={timeSince}
-            handleLike={handleLike}
-            handleShowComments={handleShowComments}
-            handleCommentChange={handleCommentChange}
-            handleCommentSubmit={handleCommentSubmit}
-            handleRepost={handleRepost}
-            handleShowReposts={handleShowReposts}
-            setLightbox={setLightbox}
-            setActiveLikesBox={setActiveLikesBox}
-            setShowEmojiPickerFor={setShowEmojiPickerFor}
-            setReposting={setReposting}
-            setIsModalOpen={setIsModalOpen}
-            isLastPost={isLastPost}
-            lastPostRef={lastPostRef}
-            handleEdit={handleEditClick}
-            handleDeletePost={handleDeletePost}
-            handleCopyLink={handleCopyLink}
-            handleFollowAuthor={handleFollowAuthor}
-            handleHidePost={handleHidePost}
-            handleBlockAuthor={handleBlockAuthor}
-            handleReportPost={handleReportPost}
-            handleLikeComment={handleLikeComment}
-            replyingTo={replyingTo}
-            setReplyingTo={setReplyingTo}
-            replyTextMap={replyText}
-            replyMap={replyMap}
-            loadingReplies={loadingReplies}
-            handleReplyChange={handleReplyChange}
-            handleReplySubmit={handleReplySubmit}
-            handleToggleReplies={handleToggleReplies}
-          />
-        );
-      }),
-    [
-      posts,
-      likedPosts,
-      repostedPosts,
-      activeCommentPost,
-      commentTextMap,
-      commentsData,
-      showEmojiPickerFor,
-      reposting,
-      activeLikesBox,
-      timeSince,
-      handleLike,
-      handleShowComments,
-      handleCommentChange,
-      handleCommentSubmit,
-      handleRepost,
-      handleShowReposts,
-      handleEditClick,
-      lastPostRef,
-      handleDeletePost,
-      handleCopyLink,
-      handleFollowAuthor,
-      handleHidePost,
-      handleBlockAuthor,
-      handleReportPost,
-      handleLikeComment,
-      replyingTo,
-      replyText,
-      replyMap,
-      loadingReplies,
-      handleReplyChange,
-      handleReplySubmit,
-      handleToggleReplies,
-    ]
-  );
 
   if (isLoading) return <p className="text-center p-8">Loading feed...</p>;
   if (isError)
@@ -641,59 +182,28 @@ const Feed: React.FC = () => {
   return (
     <>
       <div className="max-w-[42rem] mx-auto space-y-1 px-1 sm:px-0">
-        <Suspense fallback={<p>Loading...</p>}>{memoizedPosts}</Suspense>
+        <Suspense fallback={<p>Loading posts...</p>}>
+          {posts.map((post, index) => {
+            const isLastPost = index === posts.length - 1;
+            return (
+              <PostItem
+                key={post.id}
+                post={post}
+                timeSince={timeSince}
+                onEdit={handleEditClick}
+                onDelete={handleDeleteClick}
+                isLastPost={isLastPost}
+                lastPostRef={lastPostRef}
+              />
+            );
+          })}
+        </Suspense>
         {isFetchingNextPage && (
           <p className="text-center p-4 text-blue-600">Loading more posts...</p>
         )}
       </div>
 
       <Suspense fallback={null}>
-        {isModalOpen && (
-          <RepostModal
-            post={isModalOpen}
-            onClose={() => setIsModalOpen(null)}
-            onSubmit={handleRepostFromModal}
-          />
-        )}
-
-        {lightbox && lightbox.post && (
-          <MediaLightbox
-            post={lightbox.post}
-            media={lightbox.media}
-            initialIndex={lightbox.index}
-            onClose={() => setLightbox(null)}
-          />
-        )}
-
-        {repostModalPost && (
-          <RepostDialog
-            onClose={() => setRepostModalPost(null)}
-            reposts={repostList}
-            loading={repostLoading}
-            originalPost={repostModalPost}
-            timeSince={timeSince}
-            postItemProps={{
-              isLiked: likedPosts.has(repostModalPost.id),
-              isReposted: repostedPosts.has(repostModalPost.id),
-              isCommentSectionOpen: activeCommentPost === repostModalPost.id,
-              commentText: commentTextMap[repostModalPost.id] || "",
-              comments:
-                activeCommentPost === repostModalPost.id
-                  ? commentsData || []
-                  : [],
-              showEmojiPicker: showEmojiPickerFor === repostModalPost.id,
-              activeLikesBoxId: activeLikesBox,
-              handleLike,
-              handleRepost,
-              handleShowReposts,
-              setShowEmojiPickerFor,
-              setReposting,
-              setIsModalOpen,
-              hideRepostButton: true,
-            }}
-          />
-        )}
-
         {editingPost && (
           <PostDialog
             close={handleEditClose}

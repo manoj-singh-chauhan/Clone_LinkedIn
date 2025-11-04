@@ -1,7 +1,5 @@
-import React, { useState, useEffect } from "react";
-// import ReactDOM from "react-dom";
+import React, { useEffect, useState } from "react";
 import { MdAccountCircle } from "react-icons/md";
-// import { HiOutlineDotsHorizontal } from "react-icons/hi";
 import {
   RepostWithUser,
   Post as PostType,
@@ -9,14 +7,6 @@ import {
 } from "../../api/Post";
 import PostItem, { RepostingPost } from "./PostItem";
 
-interface RepostDialogProps {
-  onClose: () => void;
-  reposts: RepostWithUser[];
-  loading: boolean;
-  originalPost: PostType;
-  timeSince: (dateString: string) => string;
-  postItemProps?: Partial<PostItemProps>;
-}
 
 interface PostItemProps {
   post: PostType;
@@ -28,8 +18,8 @@ interface PostItemProps {
   showEmojiPicker?: boolean;
   activeLikesBoxId?: number | null;
   timeSince: (dateString: string) => string;
-  handleLike: (postId: number) => Promise<void>;
-  handleRepost?: (postId: number, comment?: string) => Promise<void>;
+  handleLike: (postId: number) => void; // Changed from Promise<void> to void to match mutation
+  handleRepost?: (postId: number, comment?: string) => void; // Changed from Promise<void>
   handleShowReposts?: (post: PostType) => void;
   setActiveLikesBox?: React.Dispatch<React.SetStateAction<number | null>>;
   setShowEmojiPickerFor?: React.Dispatch<React.SetStateAction<number | null>>;
@@ -37,6 +27,19 @@ interface PostItemProps {
   setIsModalOpen?: React.Dispatch<React.SetStateAction<PostType | null>>;
   hideRepostButton?: boolean;
   disableRepostCountClick?: boolean;
+  onEdit: (post: PostType) => void;
+  onDelete: (post: PostType) => void;
+  isLastPost: boolean;
+  lastPostRef?: (node: HTMLDivElement | null) => void;
+}
+
+interface RepostDialogProps {
+  onClose: () => void;
+  reposts: RepostWithUser[];
+  loading: boolean;
+  originalPost: PostType;
+  timeSince: (dateString: string) => string;
+  postItemProps?: Partial<PostItemProps>;
 }
 
 const RepostDialog: React.FC<RepostDialogProps> = ({
@@ -53,7 +56,7 @@ const RepostDialog: React.FC<RepostDialogProps> = ({
     setLocalPost(originalPost);
   }, [originalPost]);
 
-  const handleDialogLike = async (postId: number) => {
+  const handleDialogLike = (postId: number) => {
     setLocalPost((prev) => ({
       ...prev,
       likeCount: prev.likedByCurrentUser
@@ -62,28 +65,15 @@ const RepostDialog: React.FC<RepostDialogProps> = ({
       likedByCurrentUser: !prev.likedByCurrentUser,
     }));
 
-    try {
-      await postItemProps?.handleLike?.(postId);
-    } catch (err) {
-      console.error("Error liking post inside dialog:", err);
-      // Revert state on error
-      setLocalPost((prev) => ({
-        ...prev,
-        likeCount: prev.likedByCurrentUser
-          ? prev.likeCount - 1
-          : prev.likeCount + 1,
-        likedByCurrentUser: !prev.likedByCurrentUser,
-      }));
-    }
+    postItemProps?.handleLike?.(postId);
   };
 
   return (
     <div className="fixed inset-0 bg-black/60 z-[1000]">
       <div
         className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden animate-fadeIn
-                   absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2"
+                 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2"
       >
-        {/* Header */}
         <div className="flex justify-between items-center px-5 py-4 sticky top-0 bg-white z-10 border-b border-gray-200">
           <h3 className="text-lg font-semibold text-gray-900">
             {reposts.length} Repost{reposts.length !== 1 ? "s" : ""}
@@ -137,22 +127,20 @@ const RepostDialog: React.FC<RepostDialogProps> = ({
                       )}
                     </div>
                   </div>
-
-                  {/* Dots button */}
-                  {/* <button className="text-gray-500 hover:text-gray-700 p-1 rounded-full">
-                    <HiOutlineDotsHorizontal className="w-5 h-5" />
-                  </button> */}
                 </div>
 
                 <div className="mt-3 border border-gray-200 rounded-xl bg-white shadow-sm">
                   <PostItem
-                    {...postItemProps}
+                    {...(postItemProps as PostItemProps)} 
                     post={localPost}
                     isLiked={localPost.likedByCurrentUser ?? false}
                     timeSince={timeSince}
                     handleLike={handleDialogLike}
                     hideRepostButton={true}
                     disableRepostCountClick={true}
+                    onEdit={() => {}}
+                    onDelete={() => {}}
+                    isLastPost={false}
                   />
                 </div>
               </div>

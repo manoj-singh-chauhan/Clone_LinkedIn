@@ -337,17 +337,29 @@ export const getPostLikesService = async (
 interface CommentWithUser {
   commentId: number;
   content: string;
-  user: { id: number; email: string; name?: string | null };
+  likeCount: number;
+  replyCount: number;
+  likedByCurrentUser: boolean;
+  user: { id: number | null; email: string | null; name?: string | null };
   createdAt: Date;
+}
+
+export interface PaginatedCommentsResponse {
+  comments: CommentWithUser[];
+  totalCount: number;
 }
 
 export const getPostCommentsService = async (
   postId: number,
-  userId: number
-): Promise<CommentWithUser[]> => {
+  userId: number,
+  page: number,
+  limit: number 
+): Promise<PaginatedCommentsResponse> => {
   const post = await Post.findByPk(postId);
   if (!post)
     throw Object.assign(new Error("Post not found"), { statusCode: 404 });
+
+  const offset = (page - 1) * limit;
 
   const userLikes = await CommentLike.findAll({
     where: { userId },
@@ -362,7 +374,7 @@ export const getPostCommentsService = async (
   });
   const likedCommentIds = new Set(userLikes.map((like) => like.commentId));
 
-  const comments = await PostComment.findAll({
+  const { rows, count } = await PostComment.findAndCountAll({
     where: {
       postId,
       parentId: null,
@@ -376,9 +388,11 @@ export const getPostCommentsService = async (
       },
     ],
     order: [["createdAt", "DESC"]],
+    limit: limit,
+    offset: offset,
   });
 
-  return comments.map((comment: any) => ({
+  const comments = rows.map((comment: any) => ({
     commentId: comment.id,
     content: comment.content,
     likeCount: comment.likeCount,
@@ -391,9 +405,11 @@ export const getPostCommentsService = async (
     },
     createdAt: comment.createdAt,
   }));
+
+  return { comments, totalCount: count };
 };
 
-//Get perticular comment reply 
+//Get perticular comment reply
 export const getCommentRepliesService = async (
   parentCommentId: number,
   userId: number
@@ -441,7 +457,7 @@ export const getCommentRepliesService = async (
   }));
 };
 
-//Get all repost of perticular repost 
+//Get all repost of perticular repost
 export interface PostWithAuthor extends Post {
   author?: {
     id: number;
@@ -475,7 +491,7 @@ export const getPostRepostsService = async (postId: number) => {
   }));
 };
 
-//Edit post 
+//Edit post
 export const updatePostService = async (
   postId: number,
   userId: number,
@@ -503,7 +519,7 @@ export const updatePostService = async (
   });
 };
 
-//Delete Repost 
+//Delete Repost
 export const deletePostService = async (postId: number, userId: number) => {
   return withTransaction(async (t) => {
     const post = await Post.findByPk(postId, { transaction: t });
@@ -526,7 +542,7 @@ export const deletePostService = async (postId: number, userId: number) => {
   });
 };
 
-//Like on comment 
+//Like on comment
 export const CommentLikeService = {
   toggleLike: async (commentId: number, userId: number) => {
     return withTransaction(async (t) => {
@@ -555,4 +571,38 @@ export const CommentLikeService = {
       }
     });
   },
+};
+
+//delete comment of apna
+export const deleteCommentService = async (
+  commentId: number,
+  userId: number
+) => {
+  return withTransaction(async (t) => {
+    const comment = await PostComment.findByPk(commentId, { transaction: t });
+    if (!comment) {
+      const error = new Error("Comment not found");
+      (error as any).statusCode = 404;
+      throw error;
+    }
+
+    if (comment.userId !== userId) {
+      const error = new Error("You are not authorized to delete this comment");
+      (error as any).statusCode = 403;
+      throw error;
+    }
+
+    const deleteCount = 1 + comment.replyCount;
+
+    const post = await Post.findByPk(comment.postId, { transaction: t });
+
+    await comment.destroy({ transaction: t });
+
+    if (post) {
+      post.commentCount = Math.max(0, post.commentCount - deleteCount);
+      await post.save({ transaction: t });
+    }
+
+    return { message: "Comment deleted successfully" };
+  });
 };

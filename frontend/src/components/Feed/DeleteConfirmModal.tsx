@@ -1,5 +1,5 @@
 import React from "react";
-// import { MdOutlineReportProblem } from "react-icons/md"; 
+// import { MdOutlineReportProblem } from "react-icons/md";
 
 interface DeleteConfirmModalProps {
   isOpen: boolean;
@@ -20,7 +20,6 @@ const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
 
   return (
     <>
-      {/* Backdrop */}
       <div
         className="fixed inset-0 z-50 bg-black bg-opacity-60"
         onClick={onClose}
@@ -32,9 +31,9 @@ const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
         <div className="relative rounded-lg bg-white shadow-xl">
           <div className="p-6">
             <h3 className="text-xl font-semibold text-gray-900">{title}</h3>
-            
+
             <p className="mt-2 text-sm text-gray-600">{message}</p>
-            
+
             <div className="mt-6 flex justify-end gap-3">
               <button
                 type="button"

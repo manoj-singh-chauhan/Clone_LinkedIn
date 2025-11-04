@@ -226,20 +226,39 @@ export const repostPost = async (
   }
 };
 
-export interface PostLikeUser {
-  id: number;
-  email: string;
-  profile: {
-    name: string;
+export interface UserLike {
+  likeId: number;
+  user: {
+    id: number;
+    email: string;
+    name: string | null;
   };
+  createdAt: string;
 }
 
-export const getPostLikes = async (postId: number): Promise<PostLikeUser[]> => {
+export const getPostLikes = async (postId: number): Promise<UserLike[]> => {
   try {
-    const res = await api.get<{ likes: PostLikeUser[] }>(
-      `/posts/${postId}/likes`
-    );
-    return res.data.likes || res.data;
+    const res = await api.get<{
+      likes: {
+        likeId: number;
+        user: {
+          id: number;
+          email: string;
+          name: string | null;
+        };
+        createdAt: string;
+      }[];
+    }>(`/posts/${postId}/likes`);
+
+    return res.data.likes.map((like) => ({
+      likeId: like.likeId,
+      user: {
+        id: like.user.id,
+        email: like.user.email,
+        name: like.user.name,
+      },
+      createdAt: like.createdAt,
+    }));
   } catch (error) {
     if (error instanceof AxiosError && error.response) {
       throw (
@@ -266,14 +285,23 @@ export interface PostCommentUser {
   likedByCurrentUser: boolean;
 }
 
+export interface GetCommentsResponse {
+  message: string;
+  comments: PostCommentUser[];
+  totalCount: number;
+}
+
 export const getPostComments = async (
-  postId: number
-): Promise<PostCommentUser[]> => {
+  postId: number,
+  page: number,
+  limit: number
+): Promise<GetCommentsResponse> => {
   try {
-    const res = await api.get<{ comments: PostCommentUser[] }>(
-      `/posts/${postId}/comments`
+    const res = await api.get<GetCommentsResponse>(
+      `/posts/${postId}/comments?page=${page}&limit=${limit}`
     );
-    return res.data.comments || res.data;
+
+    return res.data;
   } catch (error) {
     if (error instanceof AxiosError && error.response) {
       throw (
@@ -427,6 +455,26 @@ export const getCommentReplies = async (
       throw (
         (error.response.data as APIErrorResponse) || {
           message: "Failed to fetch replies",
+        }
+      );
+    }
+    throw error;
+  }
+};
+
+export const deleteComment = async (
+  commentId: number
+): Promise<DeletePostResponse> => {
+  try {
+    const res = await api.delete<DeletePostResponse>(
+      `/posts/comments/${commentId}`
+    );
+    return res.data;
+  } catch (error) {
+    if (error instanceof AxiosError && error.response) {
+      throw (
+        (error.response.data as APIErrorResponse) || {
+          message: "Failed to delete comment",
         }
       );
     }

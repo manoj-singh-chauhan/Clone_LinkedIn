@@ -9,14 +9,18 @@ interface RepostModalProps {
   onSubmit: (post: PostType, thought: string) => void;
 }
 
-const RepostModal: React.FC<RepostModalProps> = ({ post, onClose, onSubmit }) => {
+const RepostModal: React.FC<RepostModalProps> = ({
+  post,
+  onClose,
+  onSubmit,
+}) => {
   const [thought, setThought] = useState("");
 
   const handleSubmit = () => {
-    if (thought.trim() === "") {
-      // alert("Please add your thoughts before reposting.");
-      return;
-    }
+    // if (thought.trim() === "") {
+    //   // alert("Please add your thoughts before reposting.");
+    //   // return;
+    // }
     onSubmit(post, thought);
   };
 
@@ -36,7 +40,6 @@ const RepostModal: React.FC<RepostModalProps> = ({ post, onClose, onSubmit }) =>
           </button>
         </div>
 
-        {/* Body */}
         <div className="p-4">
           <div className="flex items-start gap-3 mb-2">
             <MdAccountCircle className="w-10 h-10 text-gray-500 rounded-full flex-shrink-0" />
@@ -54,16 +57,10 @@ const RepostModal: React.FC<RepostModalProps> = ({ post, onClose, onSubmit }) =>
           />
         </div>
 
-        {/* Footer */}
         <div className="flex justify-end p-4 border-t border-gray-200">
           <button
             onClick={handleSubmit}
-            disabled={thought.trim() === ""}
-            className={`px-6 py-2 rounded-full font-semibold transition ${
-              thought.trim()
-                ? "bg-blue-600 text-white hover:bg-blue-700"
-                : "bg-blue-200 text-blue-400 cursor-not-allowed"
-            }`}
+            className={`px-6 py-2 rounded-full font-semibold transition bg-blue-600 text-white hover:bg-blue-700`}
           >
             Post
           </button>
