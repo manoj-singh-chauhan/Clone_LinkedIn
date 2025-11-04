@@ -68,12 +68,12 @@ export default function ProfileMenu({ profilePic }: ProfileMenuProps) {
           <Avatar
             src={profilePic || undefined}
             sx={{ width: 48, height: 48 }}
-            alt={user?.email}
+            alt={user?.name}
           />
           <div>
             {/* Using user?.email as requested */}
             <Typography variant="body1" className="font-semibold">
-              {user?.email}
+              {user?.name}
             </Typography>
             {/* <Typography variant="body2" className="text-gray-600">  
               Your professional headline

@@ -3,6 +3,7 @@ import React, {
   // useCallback,
   useState,
   Suspense,
+  // useEffect, 
 } from "react";
 import {
   Post as PostType,
@@ -55,18 +56,6 @@ export interface MediaItem {
   type: "image" | "video" | "document";
 }
 
-// interface PostItemProps {
-//   post: PostType;
-//   timeSince: (dateString: string) => string;
-//   onEdit: (post: PostType) => void;
-//   onDelete: (post: PostType) => void;
-//   isLastPost: boolean;
-//   lastPostRef?: (node: HTMLDivElement | null) => void;
-
-//   hideRepostButton?: boolean;
-//   disableRepostCountClick?: boolean;
-// }
-
 export interface PostItemProps {
   post: PostType;
   timeSince: (dateString: string) => string;
@@ -75,18 +64,16 @@ export interface PostItemProps {
   isLastPost: boolean;
   lastPostRef?: (node: HTMLDivElement | null) => void;
 
-  
   isLiked?: boolean;
   isReposted?: boolean;
   handleLike?: (postId: number) => void;
   handleRepost?: (postId: number, comment?: string) => void;
   handleShowReposts?: (post: PostType) => void;
 
-  
   hideRepostButton?: boolean;
   disableRepostCountClick?: boolean;
+  disableMediaClick?: boolean;
 }
-
 
 const PostItem: React.FC<PostItemProps> = memo(
   ({
@@ -98,6 +85,7 @@ const PostItem: React.FC<PostItemProps> = memo(
     lastPostRef,
     hideRepostButton,
     disableRepostCountClick,
+    disableMediaClick,
   }) => {
     const { user } = useAuth();
     const queryClient = useQueryClient();
@@ -118,6 +106,8 @@ const PostItem: React.FC<PostItemProps> = memo(
     const [activeLikesBox, setActiveLikesBox] = useState(false);
     const [isRepostDropdownOpen, setIsRepostDropdownOpen] = useState(false);
 
+    // const [isEdited, setIsEdited] = useState(false); 
+
     const isLiked = post.likedByCurrentUser;
     const isReposted = post.repostedByCurrentUser;
     const isAuthor = Number(user?.id) === post.author.id;
@@ -125,6 +115,10 @@ const PostItem: React.FC<PostItemProps> = memo(
     const authorName = post.author?.profile?.name || "Unknown";
     const postDate = post.createdAt ? timeSince(post.createdAt) : "";
     const media = post.media || [];
+
+    
+    const isEdited = post.isEdited;
+    
 
     const likeMutation = useMutation({
       mutationFn: () => likePost(post.id),
@@ -244,7 +238,17 @@ const PostItem: React.FC<PostItemProps> = memo(
                 {authorName}
                 <MdOutlineVerifiedUser size={15} title="verified user" />
               </p>
-              <p className="text-sm text-gray-500">{postDate} ago</p>
+
+              {/* Yeh JSX block naye 'isEdited' variable par nirbhar hai */}
+              <p className="text-sm text-gray-500">
+                <span>{postDate} ago</span>
+                {isEdited && (
+                  <>
+                    <span className="mx-1">·</span>
+                    <span>Edited</span>
+                  </>
+                )}
+              </p>
             </div>
 
             <div className="flex-shrink-0">
@@ -365,12 +369,20 @@ const PostItem: React.FC<PostItemProps> = memo(
               );
             })()}
 
-          <PostMediaGrid
+          {/* <PostMediaGrid
             media={media as MediaItem[]}
             onClick={(index) =>
               setLightbox({ media: media as MediaItem[], index })
             }
-          />
+          /> */}
+
+          <PostMediaGrid
+            media={media as MediaItem[]}
+            onClick={!disableMediaClick 
+               ? (index) => setLightbox({ media: media as MediaItem[], index })
+               : undefined 
+            }
+            />
 
           <div className="flex justify-between items-center text-sm text-gray-600 border-t border-gray-100 pt-3 mt-3 px-2 relative">
             <span

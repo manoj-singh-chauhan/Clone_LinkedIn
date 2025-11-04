@@ -9,8 +9,6 @@ import { googleLogin } from "./user.service";
 import { COOKIE_OPTIONS } from "../../utils/cookieOptions";
 import { verifyCaptcha } from "../../utils/verifyCaptcha";
 
-
-
 //signup controller
 export const signup = async (req: Request, res: Response) => {
   try {
@@ -20,12 +18,13 @@ export const signup = async (req: Request, res: Response) => {
     const verificationLink = `${process.env.FRONTEND_URL}/verify/${token}`;
     await sendVerificationEmail(email, verificationLink);
 
-    res.status(201).json({ message: "Signup successfulyy. Check your email to verify." });
+    res
+      .status(201)
+      .json({ message: "Signup successfulyy. Check your email to verify." });
   } catch (err: any) {
     res.status(400).json({ error: err.message });
   }
 };
-
 
 //verify controller
 export const verifyEmail = async (req: Request, res: Response) => {
@@ -43,19 +42,19 @@ export const verifyEmail = async (req: Request, res: Response) => {
 export const login = async (req: Request, res: Response) => {
   try {
     const { email, password } = req.body;
-    const { user, token } = await loginUser(email, password);
-    
+
+    const { user, token, name } = await loginUser(email, password);
+
     res.cookie("token", token, COOKIE_OPTIONS);
 
     res.json({
       message: "Login successful",
-      user: { id: user.id, email: user.email },
+      user: { id: user.id, email: user.email, name: name },
     });
   } catch (err: any) {
     res.status(400).json({ error: err.message });
   }
 };
-
 
 //forgot password
 
@@ -75,10 +74,7 @@ export const forgotPassword = async (req: Request, res: Response) => {
   }
 };
 
-
-
-
-//after forgot reset password 
+//after forgot reset password
 export const resetUserPassword = async (req: Request, res: Response) => {
   try {
     const { token } = req.params;
@@ -91,24 +87,24 @@ export const resetUserPassword = async (req: Request, res: Response) => {
   }
 };
 
-
 //google login
+
 export const googleAuth = async (req: Request, res: Response) => {
   try {
     const { idToken } = req.body;
-    const { user, token } = await googleLogin(idToken);
+
+    const { user, token, name } = await googleLogin(idToken);
 
     res.cookie("token", token, COOKIE_OPTIONS);
 
     res.status(200).json({
       message: "Google login successful",
-      user: { id: user.id, email: user.email },
+      user: { id: user.id, email: user.email, name: name },
     });
   } catch (err: any) {
     res.status(400).json({ error: err.message });
   }
 };
-
 
 export const logout = async (req: Request, res: Response) => {
   res.clearCookie("token", COOKIE_OPTIONS);

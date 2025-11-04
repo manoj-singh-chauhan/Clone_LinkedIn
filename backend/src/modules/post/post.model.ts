@@ -17,12 +17,14 @@ interface PostAttributes {
   repostCount: number;
   lastActivityAt: Date;
   postType: "public" | "connection-only";
+  isEdited: boolean;
 }
 
 export interface PostCreationAttributes extends Optional<PostAttributes,
   "id" | "content" | "media" | "hashtags" | "isRepost" |
   "originalPostId" | "repostComment" | "likeCount" | "celebrateCount" |
-  "commentCount" | "repostCount" | "lastActivityAt" | "postType"
+  "commentCount" | "repostCount" | "lastActivityAt" | "postType" |
+  "isEdited"
 > {}
 
 export class Post extends Model<PostAttributes, PostCreationAttributes> implements PostAttributes {
@@ -40,6 +42,7 @@ export class Post extends Model<PostAttributes, PostCreationAttributes> implemen
   public repostCount!: number;
   public lastActivityAt!: Date;
   public postType!: "public" | "connection-only";
+  public isEdited!: boolean;
   public readonly createdAt!: Date;
   public readonly updatedAt!: Date;
 }
@@ -117,6 +120,11 @@ Post.init(
       type: DataTypes.ENUM("public", "connection-only"), 
       allowNull: false, 
       defaultValue: "public" 
+    },
+    isEdited: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
+      allowNull: false,
     },
   },
   {

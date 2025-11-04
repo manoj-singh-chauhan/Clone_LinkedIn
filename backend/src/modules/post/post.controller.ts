@@ -17,6 +17,17 @@ import { getPostLikesService } from "./post.service";
 import { getPostCommentsService } from "./post.service";
 import { getPostRepostsService } from "./post.service";
 import logger from "../../utils/logger";
+import { Request } from "express";
+import "multer"; 
+
+declare global {
+  interface AuthenticatedRequest extends Request {
+    userId?: number;
+    files?:
+      | { [fieldname: string]: Express.Multer.File[] }
+      | Express.Multer.File[];
+  }
+}
 
 //CREATE POST
 export const createPost = async (req: AuthenticatedRequest, res: Response) => {

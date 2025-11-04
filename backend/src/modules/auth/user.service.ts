@@ -70,31 +70,35 @@ export const loginUser = async (email: string, password: string) => {
 
   if (!user.isVerified) throw new Error("Please verify your email first");
 
-  // if (user.isGoogleLogin) {
-  //   throw new Error(
-  //     "This account is linked with Google. Please login using Google."
-  //   );
-  // }
   if (!user.password) {
     if (user.isGoogleLogin) {
       throw new Error(
-        // "This account was created with Google. Please login using Google."
         "This email is linked to a Google account. Please continue by selecting 'Login with Google'."
       );
     } else {
       throw new Error("Password not set for this account.");
     }
   }
-  //check
-  // if (!user.password) {
-  //   throw new Error("Password not set for this user");
-  // }
+
   const isMatch = await bcrypt.compare(password, user.password);
   if (!isMatch) throw new Error("Invalid password");
-  const token = jwt.sign({ id: user.id, email: user.email }, JWT_SECRET!, {
-    expiresIn: "1h",
-  });
-  return { user, token };
+
+  const profile = await Profile.findOne({ where: { userId: user.id } });
+  const name = profile?.name || null;
+
+  const token = jwt.sign(
+    {
+      id: user.id,
+      email: user.email,
+      name: name,
+    },
+    JWT_SECRET!,
+    {
+      expiresIn: "1h",
+    }
+  );
+
+  return { user, token, name };
 };
 
 //forgot password
@@ -103,7 +107,9 @@ export const requestPasswordReset = async (email: string) => {
   if (!user) throw new Error("User not found");
 
   if (user.isGoogleLogin && !user.password) {
-    throw new Error("This account was created with Google. Please login with Google.");
+    throw new Error(
+      "This account was created with Google. Please login with Google."
+    );
   }
 
   const token = crypto.randomBytes(32).toString("hex");
@@ -142,50 +148,61 @@ export const googleLogin = async (idToken: string) => {
   });
   const payload = ticket.getPayload();
   if (!payload?.email) throw new Error("Invalid Google token");
+
   const email = payload.email;
-  const name = payload.name || "User";
+  const googleName = payload.name || "User";
+  let finalName = googleName;
+
   let user = await User.findOne({ where: { email } });
+
   if (!user) {
+    // Naya user
     user = await User.create({
       email,
       password: null,
       isVerified: true,
       isGoogleLogin: true,
     });
-
-    await Profile.create({
-      userId: user.id,
-      name,
-    });
+    await Profile.create({ userId: user.id, name: googleName });
+    finalName = googleName;
   } else {
-    let changed = false;
+    // Purana user
 
+    let changed = false;
     if (!user.isVerified) {
       user.isVerified = true;
-      user.verificationToken = null;
-      user.tokenExpiry = null;
       changed = true;
     }
-
     if (!user.isGoogleLogin) {
       user.isGoogleLogin = true;
       changed = true;
     }
-
     if (changed) await user.save();
 
     const profile = await Profile.findOne({ where: { userId: user.id } });
     if (!profile) {
-      await Profile.create({ userId: user.id, name });
-    } else if ((!profile.name || profile.name.trim() === "") && name) {
-      profile.name = name;
-      await profile.save();
+      await Profile.create({ userId: user.id, name: googleName });
+      finalName = googleName;
+    } else {
+      if ((!profile.name || profile.name.trim() === "") && googleName) {
+        profile.name = googleName;
+        await profile.save();
+        finalName = googleName;
+      } else {
+        finalName = profile.name;
+      }
     }
   }
 
-  const token = jwt.sign({ id: user.id, email: user.email }, JWT_SECRET!, {
-    expiresIn: "1h",
-  });
+  const token = jwt.sign(
+    {
+      id: user.id,
+      email: user.email,
+      name: finalName,
+    },
+    JWT_SECRET!,
+    { expiresIn: "1h" }
+  );
 
-  return { user, token };
+  return { user, token, name: finalName };
 };

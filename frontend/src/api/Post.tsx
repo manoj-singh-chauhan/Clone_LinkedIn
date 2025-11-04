@@ -114,6 +114,8 @@ export interface Post {
   commentCount: number;
   repostCount: number;
   createdAt: string;
+  updatedAt: string;
+  isEdited: boolean;
   author: PostAuthor;
   originalPost?: Post | null;
   likedByCurrentUser?: boolean;

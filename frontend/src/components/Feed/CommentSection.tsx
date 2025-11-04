@@ -16,7 +16,7 @@ import {
   useQueryClient,
   InfiniteData,
 } from "@tanstack/react-query";
-import { useAuth } from "../../context/AuthContext";
+import { useAuth } from "../../context/AuthContext"; // <-- Yahaan se 'user' aa raha hai
 import { MdAccountCircle, MdDelete, MdReport } from "react-icons/md";
 import { BsEmojiSmile, BsThreeDots } from "react-icons/bs";
 import { AiOutlineLike } from "react-icons/ai";
@@ -30,17 +30,35 @@ interface CommentSectionProps {
 
 const COMMENT_LIMIT = 3;
 
+// Helper function (Username ko style karne ke liye)
+const renderCommentContent = (text: string) => {
+  // Yeh Regex @username ko dhoondhega
+  const parts = text.split(/(@[a-zA-Z0-9_]+)/g);
+
+  return parts.map((part, index) => {
+    if (part.startsWith("@")) {
+      return (
+        <strong key={index} className="text-blue-600 font-semibold">
+          {part}
+        </strong>
+      );
+    }
+    return part;
+  });
+};
+
 const CommentSection: React.FC<CommentSectionProps> = ({
   postId,
   timeSince,
   inputId = "comment-input",
 }) => {
-  const { user } = useAuth();
+  const { user } = useAuth(); // <-- 'user' object (jismein ab 'name' hona chahiye)
   const queryClient = useQueryClient();
   const commentsQueryKey = ["comments", postId];
 
   const [commentText, setCommentText] = useState("");
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [showReplyEmojiPicker, setShowReplyEmojiPicker] = useState(false); // Reply box ke liye
   const [replyingTo, setReplyingTo] = useState<number | null>(null);
   const [replyTextMap, setReplyTextMap] = useState<Record<number, string>>({});
   const [replyMap, setReplyMap] = useState<Record<number, PostCommentUser[]>>(
@@ -50,6 +68,8 @@ const CommentSection: React.FC<CommentSectionProps> = ({
   const [activeCommentMenu, setActiveCommentMenu] = useState<number | null>(
     null
   );
+
+  const [isInputActive, setIsInputActive] = useState(false);
 
   const {
     data,
@@ -88,6 +108,8 @@ const CommentSection: React.FC<CommentSectionProps> = ({
       queryClient.invalidateQueries({ queryKey: commentsQueryKey });
       queryClient.invalidateQueries({ queryKey: ["posts"] });
       setCommentText("");
+      setIsInputActive(false); 
+      setShowEmojiPicker(false);
     },
   });
 
@@ -143,6 +165,12 @@ const CommentSection: React.FC<CommentSectionProps> = ({
       content: string;
     }) => replyToComment(parentCommentId, content),
     onSuccess: (newReply: CommentReplyResponse, variables) => {
+      
+      // --- FIX 1: "YOU" PROBLEM ---
+      // 'user' object (useAuth() se) ab 'name' property rakhta hai
+      // (kyunki humne login controller fix kar diya hai)
+      const currentUserName = user?.name || user?.email || "Unknown"; // "You" ko hata diya
+
       const newReplyComment: PostCommentUser = {
         commentId: newReply.commentId,
         content: newReply.content,
@@ -152,7 +180,7 @@ const CommentSection: React.FC<CommentSectionProps> = ({
         likedByCurrentUser: false,
         user: {
           id: Number(user?.id) || null,
-          name: user?.name || "You",
+          name: currentUserName, // <-- Yahaan 'currentUserName' ka istemaal karein
           email: user?.email || null,
         },
       };
@@ -169,6 +197,7 @@ const CommentSection: React.FC<CommentSectionProps> = ({
         [variables.parentCommentId]: "",
       }));
       setReplyingTo(null);
+      setShowReplyEmojiPicker(false);
       queryClient.invalidateQueries({ queryKey: commentsQueryKey });
     },
   });
@@ -210,6 +239,15 @@ const CommentSection: React.FC<CommentSectionProps> = ({
   const handleEmojiClick = (emojiData: EmojiClickData) => {
     setCommentText((prev) => prev + emojiData.emoji);
   };
+  
+  // Reply box ke liye naya handler
+  const handleReplyEmojiClick = (emojiData: EmojiClickData) => {
+    if (replyingTo === null) return;
+    setReplyTextMap((prev) => ({
+      ...prev,
+      [replyingTo]: (prev[replyingTo] || "") + emojiData.emoji,
+    }));
+  };
 
   const handleCommentSubmit = () => {
     const text = commentText.trim();
@@ -229,6 +267,19 @@ const CommentSection: React.FC<CommentSectionProps> = ({
     const content = replyTextMap[parentCommentId]?.trim();
     if (!content) return;
     replyMutation.mutate({ parentCommentId, content });
+  };
+
+  const handleReplyToReply = (
+    parentCommentId: number,
+    userToReply: PostCommentUser["user"]
+  ) => {
+    setReplyingTo(parentCommentId);
+    // --- FIX 1 (Again): "User" PROBLEM ---
+    const userName = userToReply?.name || userToReply?.email || "Unknown"; // "User" ko hata diya
+    setReplyTextMap((prev) => ({
+      ...prev,
+      [parentCommentId]: `@${userName} `,
+    }));
   };
 
   const handleToggleReplies = useCallback(
@@ -277,53 +328,92 @@ const CommentSection: React.FC<CommentSectionProps> = ({
 
   return (
     <div className="mt-4 space-y-3 px-2">
+      
+      {/* --- LINKEDIN-STYLE INPUT BOX --- */}
       <div className="flex gap-2 items-start">
         <MdAccountCircle className="w-10 h-10 text-gray-400 rounded-full flex-shrink-0" />
-        <div className="flex-1 flex flex-col relative">
-          <div className="flex items-center border border-gray-300 rounded-full px-3 py-1">
+
+        {!isInputActive ? (
+          // ----- STATE 1: INACTIVE (Default View) -----
+          <div className="flex-1 flex items-center border border-gray-300 rounded-full px-3 py-1">
             <input
               id={inputId}
               type="text"
-              placeholder="Write a comment..."
-              value={commentText}
-              onChange={(e) => setCommentText(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") handleCommentSubmit();
-              }}
-              className="flex-1 outline-none py-2 px-1 rounded-full"
+              placeholder="Add a comment..."
+              className="flex-1 outline-none py-2 px-1 rounded-full cursor-text"
+              onFocus={() => setIsInputActive(true)} 
             />
             <BsEmojiSmile
               size={22}
               className="text-gray-500 cursor-pointer hover:text-yellow-500 ml-2"
-              onClick={() => setShowEmojiPicker((prev) => !prev)}
+              onClick={() => setIsInputActive(true)}
             />
           </div>
-          {showEmojiPicker && (
-            <div className="absolute -right-2 -top-[400px] z-50">
-              <EmojiPicker
-                onEmojiClick={handleEmojiClick}
-                width={350}
-                height={400}
+        ) : (
+          // ----- STATE 2: ACTIVE (Expanded View) -----
+          <div className="flex-1 flex flex-col relative border border-gray-300 rounded-xl p-3">
+            <textarea
+              id={inputId}
+              placeholder="Add a comment..."
+              value={commentText}
+              onChange={(e) => setCommentText(e.target.value)}
+              className="flex-1 outline-none w-full text-sm resize-none"
+              rows={3}
+              autoFocus 
+            />
+            {/* Bottom bar with buttons */}
+            <div className="flex justify-between items-center mt-3">
+              <BsEmojiSmile
+                size={22}
+                className="text-gray-500 cursor-pointer hover:text-yellow-500"
+                onClick={() => setShowEmojiPicker((prev) => !prev)}
               />
-            </div>
-          )}
-          {commentText.trim() && (
-            <button
-              className="mt-1 bg-blue-600 text-white px-4 py-1 rounded-full text-sm hover:bg-blue-700 transition self-end"
-              onClick={handleCommentSubmit}
-              disabled={commentMutation.isPending}
-            >
-              {commentMutation.isPending ? "Posting..." : "Send"}
-            </button>
-          )}
-        </div>
-      </div>
 
+              <div className="flex gap-2">
+                <button
+                  className="text-sm font-semibold text-gray-600 px-4 py-1 rounded-full hover:bg-gray-200 transition"
+                  onClick={() => {
+                    setIsInputActive(false);
+                    setCommentText("");
+                    setShowEmojiPicker(false);
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="bg-blue-600 text-white px-4 py-1 rounded-full text-sm font-semibold hover:bg-blue-700 transition disabled:bg-gray-200 disabled:text-gray-500 disabled:cursor-not-allowed"
+                  onClick={handleCommentSubmit}
+                  disabled={!commentText.trim() || commentMutation.isPending}
+                >
+                  {commentMutation.isPending ? "Posting..." : "Post"}
+                </button>
+              </div>
+            </div>
+
+            {/* Emoji Picker */}
+            {showEmojiPicker && (
+              <div className="absolute top-full z-50 mt-1">
+                <EmojiPicker
+                  onEmojiClick={handleEmojiClick}
+                  width={350}
+                  height={400}
+                />
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+      {/* --- END INPUT BOX --- */}
+
+      {/* --- Comment List --- */}
       <div className="space-y-3 mt-2">
         {comments.map((comment) => {
           const replies = replyMap[comment.commentId] || [];
           const isReplying = replyingTo === comment.commentId;
           const areRepliesVisible = replyMap[comment.commentId] != null;
+          
+          // --- FIX 1 (Again): Fallback logic
+          const commentAuthorName = comment.user?.name || comment.user?.email || "Unknown";
 
           return (
             <Fragment key={comment.commentId}>
@@ -331,6 +421,7 @@ const CommentSection: React.FC<CommentSectionProps> = ({
                 <div className="flex gap-2">
                   <MdAccountCircle className="w-8 h-8 text-gray-400 rounded-full flex-shrink-0" />
                   <div className="bg-gray-100 rounded-xl px-3 py-2 flex-1 relative">
+                    {/* ... 3-dot menu ... */}
                     <div className="absolute top-2 right-2">
                       <button
                         title="Comment options"
@@ -377,10 +468,10 @@ const CommentSection: React.FC<CommentSectionProps> = ({
                     </div>
 
                     <p className="text-sm font-semibold text-gray-800">
-                      {comment.user?.name}
+                      {commentAuthorName} {/* <-- YAHAN FIX HAI */}
                     </p>
                     <p className="text-sm text-gray-700 mt-1">
-                      {comment.content}
+                      {renderCommentContent(comment.content)}
                     </p>
                     <div className="text-xs text-gray-500 mt-2 flex items-center gap-2">
                       <span>{timeSince(comment.createdAt)} ago</span>
@@ -409,9 +500,20 @@ const CommentSection: React.FC<CommentSectionProps> = ({
                       )}
                       <span className="font-bold">·</span>
                       <button
-                        onClick={() =>
-                          setReplyingTo(isReplying ? null : comment.commentId)
-                        }
+                        onClick={() => {
+                          if (isReplying) {
+                            setReplyingTo(null);
+                            setShowReplyEmojiPicker(false);
+                          } else {
+                            setReplyingTo(comment.commentId);
+                            // --- FIX 1 (Again): Fallback logic
+                            const userName = comment.user?.name || comment.user?.email || "Unknown";
+                            setReplyTextMap((prev) => ({
+                              ...prev,
+                              [comment.commentId]: `@${userName} `,
+                            }));
+                          }
+                        }}
                         className="font-semibold text-gray-600 hover:underline"
                       >
                         Reply
@@ -437,124 +539,182 @@ const CommentSection: React.FC<CommentSectionProps> = ({
                   )}
                 </div>
 
+                {/* --- FIX 2: NAYA REPLY BOX UI --- */}
                 {isReplying && (
                   <div className="ml-10 mt-2 flex gap-2 items-start">
                     <MdAccountCircle className="w-8 h-8 text-gray-400 rounded-full flex-shrink-0" />
-                    <div className="flex-1 flex flex-col relative">
-                      <div className="flex items-center border border-gray-300 rounded-full px-3 py-1">
-                        <input
-                          type="text"
-                          placeholder="Write a reply..."
-                          value={replyTextMap[comment.commentId] || ""}
-                          onChange={(e) =>
-                            handleReplyChange(comment.commentId, e.target.value)
+                    {/* Active/Expanded Box Style */}
+                    <div className="flex-1 flex flex-col relative border border-gray-300 rounded-xl p-3">
+                      <textarea
+                        id={`reply-input-${comment.commentId}`}
+                        placeholder="Add a reply..."
+                        value={replyTextMap[comment.commentId] || ""}
+                        onChange={(e) =>
+                          handleReplyChange(comment.commentId, e.target.value)
+                        }
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && !e.shiftKey) { // Submit on Enter
+                            e.preventDefault();
+                            handleReplySubmit(comment.commentId);
                           }
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter")
-                              handleReplySubmit(comment.commentId);
-                          }}
-                          className="flex-1 outline-none py-1 px-1 rounded-full text-sm"
-                          autoFocus
+                        }}
+                        className="flex-1 outline-none w-full text-sm resize-none"
+                        rows={2} // Replies ke liye 2 rows kaafi hain
+                        autoFocus
+                      />
+                      {/* Bottom bar with buttons */}
+                      <div className="flex justify-between items-center mt-3">
+                        <BsEmojiSmile
+                          size={22}
+                          className="text-gray-500 cursor-pointer hover:text-yellow-500"
+                          onClick={() => setShowReplyEmojiPicker((prev) => !prev)}
                         />
+
+                        <div className="flex gap-2">
+                          <button
+                            className="text-sm font-semibold text-gray-600 px-4 py-1 rounded-full hover:bg-gray-200 transition"
+                            onClick={() => {
+                              setReplyingTo(null); // Reply box band karein
+                              setReplyTextMap((prev) => ({...prev, [comment.commentId]: ""})); // Text clear karein
+                              setShowReplyEmojiPicker(false);
+                            }}
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            className="bg-blue-600 text-white px-4 py-1 rounded-full text-sm font-semibold hover:bg-blue-700 transition disabled:bg-gray-200 disabled:text-gray-500 disabled:cursor-not-allowed"
+                            onClick={() => handleReplySubmit(comment.commentId)}
+                            disabled={
+                              !(replyTextMap[comment.commentId] || "").trim() ||
+                              replyMutation.isPending
+                            }
+                          >
+                            {replyMutation.isPending ? "Posting..." : "Reply"}
+                          </button>
+                        </div>
                       </div>
-                      {(replyTextMap[comment.commentId] || "").trim() && (
-                        <button
-                          className="mt-1 bg-blue-600 text-white px-3 py-0.5 rounded-full text-xs hover:bg-blue-700 transition self-end"
-                          onClick={() => handleReplySubmit(comment.commentId)}
-                          disabled={replyMutation.isPending}
-                        >
-                          {replyMutation.isPending ? "..." : "Post"}
-                        </button>
+                      
+                      {/* Reply Emoji Picker */}
+                      {showReplyEmojiPicker && (
+                        <div className="absolute top-full z-50 mt-1">
+                          <EmojiPicker
+                            onEmojiClick={handleReplyEmojiClick}
+                            width={350}
+                            height={400}
+                          />
+                        </div>
                       )}
                     </div>
                   </div>
                 )}
+                {/* --- END FIX 2 --- */}
+
+
+                {/* Replies List */}
                 {areRepliesVisible && (
                   <div className="ml-10 space-y-3">
-                    {replies.map((reply) => (
-                      <div key={reply.commentId} className="flex gap-2">
-                        <MdAccountCircle className="w-8 h-8 text-gray-400 rounded-full flex-shrink-0" />
-                        <div className="bg-gray-100 rounded-xl px-3 py-2 flex-1 relative">
-                          <div className="absolute top-2 right-2">
-                            <button
-                              title="Comment options"
-                              onClick={() =>
-                                setActiveCommentMenu(
-                                  activeCommentMenu === reply.commentId
-                                    ? null
-                                    : reply.commentId
-                                )
-                              }
-                              className="p-1 rounded-full hover:bg-gray-200"
-                            >
-                              <BsThreeDots size={16} />
-                            </button>
-                            {activeCommentMenu === reply.commentId && (
-                              <div
-                                className="absolute top-full right-0 bg-white shadow-lg rounded-md z-10 w-32 border"
-                                onMouseLeave={() => setActiveCommentMenu(null)}
-                              >
-                                {reply.user?.id === Number(user?.id) && (
-                                  <button
-                                    onClick={() => {
-                                      handleDeleteComment(reply.commentId);
-                                      setActiveCommentMenu(null);
-                                    }}
-                                    className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-gray-100 flex items-center gap-2"
-                                  >
-                                    <MdDelete size={16} /> Delete
-                                  </button>
-                                )}
-                                {reply.user?.id !== Number(user?.id) && (
-                                  <button
-                                    onClick={() => {
-                                      alert("Report reply (not implemented)");
-                                      setActiveCommentMenu(null);
-                                    }}
-                                    className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
-                                  >
-                                    <MdReport size={16} /> Report
-                                  </button>
-                                )}
-                              </div>
-                            )}
-                          </div>
+                    {replies.map((reply) => {
+                      // --- FIX 1 (Again): Fallback logic
+                      const replyAuthorName = reply.user?.name || reply.user?.email || "Unknown";
 
-                          <p className="text-sm font-semibold text-gray-800">
-                            {reply.user?.name}
-                          </p>
-                          <p className="text-sm text-gray-700 mt-1">
-                            {reply.content}
-                          </p>
-                          <div className="text-xs text-gray-500 mt-2 flex items-center gap-2">
-                            <span>{timeSince(reply.createdAt)} ago</span>
-                            <span className="font-bold">·</span>
-                            <button
-                              onClick={() => handleLikeComment(reply.commentId)}
-                              className={`font-semibold hover:underline ${
-                                reply.likedByCurrentUser
-                                  ? "text-blue-600"
-                                  : "text-gray-600"
-                              }`}
-                            >
-                              Like
-                            </button>
-                            {reply.likeCount > 0 && (
-                              <>
-                                <span className="text-gray-400">·</span>
-                                <span className="flex items-center gap-0.5">
-                                  <AiOutlineLike
-                                    size={14}
-                                    className="text-gray-500"
-                                  />
-                                  {reply.likeCount}
-                                </span>
-                              </>
-                            )}
+                      return (
+                        <div key={reply.commentId} className="flex gap-2">
+                          <MdAccountCircle className="w-8 h-8 text-gray-400 rounded-full flex-shrink-0" />
+                          <div className="bg-gray-100 rounded-xl px-3 py-2 flex-1 relative">
+                            {/* ... 3-dot menu for reply ... */}
+                            <div className="absolute top-2 right-2">
+                              <button
+                                title="Comment options"
+                                onClick={() =>
+                                  setActiveCommentMenu(
+                                    activeCommentMenu === reply.commentId
+                                      ? null
+                                      : reply.commentId
+                                  )
+                                }
+                                className="p-1 rounded-full hover:bg-gray-200"
+                              >
+                                <BsThreeDots size={16} />
+                              </button>
+                              {activeCommentMenu === reply.commentId && (
+                                <div
+                                  className="absolute top-full right-0 bg-white shadow-lg rounded-md z-10 w-32 border"
+                                  onMouseLeave={() => setActiveCommentMenu(null)}
+                                >
+                                  {reply.user?.id === Number(user?.id) && (
+                                    <button
+                                      onClick={() => {
+                                        handleDeleteComment(reply.commentId);
+                                        setActiveCommentMenu(null);
+                                      }}
+                                      className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-gray-100 flex items-center gap-2"
+                                    >
+                                      <MdDelete size={16} /> Delete
+                                    </button>
+                                  )}
+                                  {reply.user?.id !== Number(user?.id) && (
+                                    <button
+                                      onClick={() => {
+                                        alert("Report reply (not implemented)");
+                                        setActiveCommentMenu(null);
+                                      }}
+                                  className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                                    >
+                                      <MdReport size={16} /> Report
+                                    </button>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+
+                            <p className="text-sm font-semibold text-gray-800">
+                              {replyAuthorName} {/* <-- YAHAN FIX HAI */}
+                            </p>
+                            <p className="text-sm text-gray-700 mt-1">
+                              {renderCommentContent(reply.content)}
+                            </p>
+                            <div className="text-xs text-gray-500 mt-2 flex items-center gap-2">
+                              <span>{timeSince(reply.createdAt)} ago</span>
+                              <span className="font-bold">·</span>
+                              <button
+                                onClick={() => handleLikeComment(reply.commentId)}
+                                className={`font-semibold hover:underline ${
+                                  reply.likedByCurrentUser
+                                    ? "text-blue-600"
+                                    : "text-gray-600"
+                                }`}
+                              >
+                                Like
+                              </button>
+                              {reply.likeCount > 0 && (
+                                <>
+                                  <span className="text-gray-400">·</span>
+                                  <span className="flex items-center gap-0.5">
+                                    <AiOutlineLike
+                                      size={14}
+                                      className="text-gray-500"
+                                    />
+                                    {reply.likeCount}
+                                  </span>
+                                </>
+                              )}
+                              <span className="font-bold">·</span>
+                              <button
+                                onClick={() =>
+                                  handleReplyToReply(
+                                    comment.commentId,
+                                    reply.user
+                                  )
+                                }
+                                className="font-semibold text-gray-600 hover:underline"
+                              >
+                                Reply
+                              </button>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -562,6 +722,7 @@ const CommentSection: React.FC<CommentSectionProps> = ({
           );
         })}
 
+        {/* Load more comments button */}
         {hasNextPage && (
           <div className="flex justify-center pt-2">
             <button

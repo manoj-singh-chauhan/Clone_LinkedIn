@@ -18,8 +18,8 @@ interface PostItemProps {
   showEmojiPicker?: boolean;
   activeLikesBoxId?: number | null;
   timeSince: (dateString: string) => string;
-  handleLike: (postId: number) => void; // Changed from Promise<void> to void to match mutation
-  handleRepost?: (postId: number, comment?: string) => void; // Changed from Promise<void>
+  handleLike: (postId: number) => void;
+  handleRepost?: (postId: number, comment?: string) => void;
   handleShowReposts?: (post: PostType) => void;
   setActiveLikesBox?: React.Dispatch<React.SetStateAction<number | null>>;
   setShowEmojiPickerFor?: React.Dispatch<React.SetStateAction<number | null>>;
@@ -31,6 +31,7 @@ interface PostItemProps {
   onDelete: (post: PostType) => void;
   isLastPost: boolean;
   lastPostRef?: (node: HTMLDivElement | null) => void;
+  disableMediaClick?: boolean;
 }
 
 interface RepostDialogProps {
@@ -72,7 +73,7 @@ const RepostDialog: React.FC<RepostDialogProps> = ({
     <div className="fixed inset-0 bg-black/60 z-[1000]">
       <div
         className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden animate-fadeIn
-                 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2"
+                  absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2"
       >
         <div className="flex justify-between items-center px-5 py-4 sticky top-0 bg-white z-10 border-b border-gray-200">
           <h3 className="text-lg font-semibold text-gray-900">
@@ -88,11 +89,11 @@ const RepostDialog: React.FC<RepostDialogProps> = ({
 
         <div
           className="overflow-y-auto 
-                     [&::-webkit-scrollbar]:w-2 
-                     [&::-webkit-scrollbar-track]:bg-gray-100 
-                     [&::-webkit-scrollbar-thumb]:bg-gray-400 
-                     [&::-webkit-scrollbar-thumb]:rounded-full
-                     [&::-webkit-scrollbar-thumb:hover]:bg-gray-500"
+                      [&::-webkit-scrollbar]:w-2 
+                      [&::-webkit-scrollbar-track]:bg-gray-100 
+                      [&::-webkit-scrollbar-thumb]:bg-gray-400 
+                      [&::-webkit-scrollbar-thumb]:rounded-full
+                      [&::-webkit-scrollbar-thumb:hover]:bg-gray-500"
         >
           {loading ? (
             <p className="text-center text-gray-500 py-12 text-base">
@@ -138,6 +139,7 @@ const RepostDialog: React.FC<RepostDialogProps> = ({
                     handleLike={handleDialogLike}
                     hideRepostButton={true}
                     disableRepostCountClick={true}
+                    disableMediaClick={true}
                     onEdit={() => {}}
                     onDelete={() => {}}
                     isLastPost={false}

@@ -513,6 +513,7 @@ export const updatePostService = async (
     }
 
     post.content = content;
+    post.isEdited = true;
     await post.save({ transaction: t });
 
     return post.toJSON();
