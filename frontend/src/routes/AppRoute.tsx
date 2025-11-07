@@ -7,7 +7,10 @@ import ForgotPassword from "../pages/Auth/ForgotPassword";
 import ResetPassword from "../pages/Auth/ResetPasswordpage";
 import ProtectedRoute from "../components/route/ProtectedRoute";
 import PublicRoute from "../components/route/PublicRoute";
-import { UploadProvider } from "../context/UploadContext"; // ✅ add this
+import { UploadProvider } from "../context/UploadContext";
+
+
+import ProfilePage from "../pages/ProfilePage"; 
 
 const AppRoute = () => (
   <BrowserRouter>
@@ -54,6 +57,17 @@ const AppRoute = () => (
             </PublicRoute>
           }
         />
+
+        
+        <Route
+          path="/profile/:userId"
+          element={
+            <ProtectedRoute>
+              <ProfilePage />
+            </ProtectedRoute>
+          }
+        />
+
       </Routes>
     </UploadProvider>
   </BrowserRouter>

@@ -4,6 +4,7 @@ import cookieParser from "cookie-parser";
 import userRoutes from "./modules/auth/user.routes";
 import { authenticate } from "./middlewares/auth.middleware";
 import postRoutes from "./modules/post/post.routes";
+import profileRoutes from "./modules/profile/profile.routes"
 
 const app = express();
 
@@ -20,5 +21,6 @@ app.get("/session", authenticate, (req, res) => {
   res.json({ user: req.user });
 });
 app.use("/posts", postRoutes);
+app.use("/profile",profileRoutes)
 
 export default app;
