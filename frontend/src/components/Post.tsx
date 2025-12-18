@@ -5,8 +5,11 @@ import { PiArticleNyTimesThin } from "react-icons/pi";
 import PostDialog from "./PostDialogs/PostDialog";
 // import ArticleDialog from "./Dialog/ArticleDialog";
 // import { useAuth } from "../context/AuthContext";
+import { useProfileData } from "../context/ProfileContext";
 
 const Post = () => {
+  const { profile } = useProfileData(); 
+  const profilePic = profile?.profilePictureUrl;
   const [postOpen, setPostOpen] = useState(false);
 
   // const [articleOpen, setArticleOpen] = useState(false);
@@ -49,7 +52,16 @@ const Post = () => {
       {/* <div className="bg-white p-3 rounded-md shadow-md mb-4 w-80 h-80 mx-auto"> */}
 
         <div className="flex items-center gap-3 mb-3">
-          <MdAccountCircle className="w-10 h-10 text-gray-500" />
+          {/* <MdAccountCircle className="w-10 h-10 text-gray-500" /> */}
+          {profilePic ? (
+            <img
+              src={profilePic}
+              alt="Profile"
+              className="w-10 h-10 rounded-full object-cover"
+            />
+          ) : (
+            <MdAccountCircle className="w-10 h-10 text-gray-500" />
+          )}
 
           <input
             type="text"

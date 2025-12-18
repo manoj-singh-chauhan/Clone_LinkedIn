@@ -83,14 +83,14 @@ export const loginUser = async (email: string, password: string) => {
   const isMatch = await bcrypt.compare(password, user.password);
   if (!isMatch) throw new Error("Invalid password");
 
-  const profile = await Profile.findOne({ where: { userId: user.id } });
-  const name = profile?.name || null;
+  // const profile = await Profile.findOne({ where: { userId: user.id } });
+  // const name = profile?.name || null;
 
   const token = jwt.sign(
     {
       id: user.id,
       email: user.email,
-      name: name,
+      // name: name,
     },
     JWT_SECRET!,
     {
@@ -98,7 +98,7 @@ export const loginUser = async (email: string, password: string) => {
     }
   );
 
-  return { user, token, name };
+  return { user, token };
 };
 
 //forgot password
@@ -198,11 +198,11 @@ export const googleLogin = async (idToken: string) => {
     {
       id: user.id,
       email: user.email,
-      name: finalName,
+      // name: finalName,
     },
     JWT_SECRET!,
     { expiresIn: "1h" }
   );
 
-  return { user, token, name: finalName };
+  return { user, token };
 };

@@ -33,4 +33,4 @@ export interface User {
 
 export type ApiError = AxiosError<{ error: string }>;
 export type GoogleCredential = CredentialResponse;
-export type FormError = FieldError | undefined;     // defined type for form field errors
+export type FormError = FieldError | undefined;     

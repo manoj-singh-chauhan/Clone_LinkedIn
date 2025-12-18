@@ -1,4 +1,4 @@
-import * as React from "react";
+import React from "react";
 import Avatar from "@mui/material/Avatar";
 import Menu from "@mui/material/Menu";
 import MenuItem from "@mui/material/MenuItem";
@@ -6,15 +6,13 @@ import Typography from "@mui/material/Typography";
 import Divider from "@mui/material/Divider";
 import { useAuth } from "../context/AuthContext";
 import { useNavigate } from "react-router-dom";
+import { useProfileData } from "../context/ProfileContext";
 
-interface ProfileMenuProps {
-  profilePic?: string | null;
-}
-
-export default function ProfileMenu({ profilePic }: ProfileMenuProps) {
+export default function ProfileMenu() {
   const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
   const open = Boolean(anchorEl);
   const { user, logout } = useAuth();
+  const { profile } = useProfileData(); 
   const navigate = useNavigate();
 
   const handleClick = (event: React.MouseEvent<HTMLElement>) =>
@@ -27,9 +25,7 @@ export default function ProfileMenu({ profilePic }: ProfileMenuProps) {
   };
 
   const handleViewProfile = () => {
-    if (user && user.id) {
-      navigate(`/profile/${user.id}`);
-    }
+    if (user && user.id) navigate(`/profile/${user.id}`);
     handleClose();
   };
 
@@ -39,7 +35,10 @@ export default function ProfileMenu({ profilePic }: ProfileMenuProps) {
         className="cursor-pointer flex items-center px-1 py-2 rounded-full transition-colors"
         onClick={handleClick}
       >
-        <Avatar src={profilePic || undefined} sx={{ width: 34, height: 34 }} />
+        <Avatar
+          src={profile?.profilePictureUrl || undefined}
+          sx={{ width: 34, height: 34 }}
+        />
       </div>
 
       <Menu
@@ -70,13 +69,13 @@ export default function ProfileMenu({ profilePic }: ProfileMenuProps) {
       >
         <div className="px-4 pt-3 pb-2 flex items-center space-x-2">
           <Avatar
-            src={profilePic || undefined}
+            src={profile?.profilePictureUrl || undefined}
             sx={{ width: 48, height: 48 }}
-            alt={user?.name || ""}
+            alt={user?.name || user?.email || ""}
           />
           <div>
             <Typography variant="body1" className="font-semibold">
-              {user?.name}
+              {profile?.name || user?.email}
             </Typography>
           </div>
         </div>
@@ -91,26 +90,7 @@ export default function ProfileMenu({ profilePic }: ProfileMenuProps) {
         </div>
 
         <Divider sx={{ my: 0.5 }} />
-
-        <Typography
-          variant="caption"
-          className="font-semibold text-gray-800 px-4 pt-2 pb-1 block"
-        >
-          Account
-        </Typography>
-        <MenuItem
-          onClick={handleClose}
-          sx={{ py: 0.5, px: 4, fontSize: "0.875rem" }}
-        >
-          Settings & Privacy
-        </MenuItem>
-
-        <Divider sx={{ my: 0.5 }} />
-
-        <MenuItem
-          onClick={handleLogout}
-          sx={{ py: 0.5, px: 4, fontSize: "0.875rem" }}
-        >
+        <MenuItem onClick={handleLogout} sx={{ py: 0.5, px: 4 }}>
           Sign Out
         </MenuItem>
       </Menu>

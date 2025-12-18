@@ -12,7 +12,7 @@ import {
   FaTimes,
 } from "react-icons/fa";
 import { MdOutlineEdit, MdAccountCircle } from "react-icons/md";
-import { useAuth } from "../../context/AuthContext";
+// import { useAuth } from "../../context/AuthContext";
 import { createPost, Post } from "../../api/Post";
 import MediaAttachmentEditor from "./MediaAttachmentEditor";
 import DocumentAttachmentEditor from "./DocumentAttachmentEditor";
@@ -24,6 +24,8 @@ import PostEmojiPicker from "./PostEmojiPicker";
 import { useUpload } from "../../context/UploadContext";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "react-hot-toast";
+import { useProfileData } from "../../context/ProfileContext";
+
 
 type DialogStep = "compose" | "media_editor" | "document_editor";
 
@@ -59,8 +61,11 @@ const PostDialog = ({
   onSubmit,
   initialMedia = null,
 }: DialogProps) => {
-  const { user } = useAuth();
-  const email = user?.email;
+  // const { user } = useAuth();
+  const { profile } = useProfileData(); 
+  const profilePic = profile?.profilePictureUrl;
+  // const email = user?.email;
+  const nam=profile?.name;
 
   const [step, setStep] = useState<DialogStep>("compose");
   const [content, setContent] = useState(initialContent);
@@ -313,12 +318,21 @@ const PostDialog = ({
             <>
               {!isEditing && (
                 <div
-                  className="flex items-center gap-2 mb-4 cursor-pointer hover:bg-gray-100 p-2 rounded-lg"
+                  className="flex items-center gap-6 mb-4 cursor-pointer hover:bg-gray-100 p-2 rounded-lg"
                   onClick={() => setShowSettings(true)}
                 >
-                  <MdAccountCircle className="w-12 h-12 text-gray-400" />
+                  {/* <MdAccountCircle className="w-12 h-12 text-gray-400" /> */}
+                  {profilePic ? (
+                    <img
+                      src={profilePic}
+                      alt="Profile"
+                      className="w-10 h-10 rounded-full object-cover"
+                    />
+                  ) : (
+                    <MdAccountCircle className="w-10 h-10 text-gray-500" />
+                  )}
                   <div>
-                    <h3 className="font-semibold text-gray-800">{email}</h3>
+                    <h3 className="font-semibold text-gray-800">{nam}</h3>
                     <span className="text-xs font-medium bg-gray-200 px-2 py-0.5 rounded-full">
                       {visibility === "public"
                         ? "Post to Anyone"

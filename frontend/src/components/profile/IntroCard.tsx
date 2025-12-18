@@ -1,19 +1,27 @@
 import React, { useState, lazy } from "react";
 import { useProfileData } from "../../context/ProfileContext";
-import { MdAccountCircle, MdEdit } from "react-icons/md";
+import { MdAccountCircle, MdEdit, MdPhotoCamera } from "react-icons/md";
 import { useAuth } from "../../context/AuthContext";
+import CoverImageEditorModal from "./CoverImageEditorModal";
 
 const IntroEditModal = lazy(() => import("./IntroEditModal"));
 const ProfilePicModal = lazy(() => import("./ProfilePicModal"));
 const UpdateProfilePhotoModal = lazy(() => import("./UpdateProfilePhotoModal"));
 const ImageEditorModal = lazy(() => import("./ImageEditorModal"));
 
+// type ModalStep =
+//   | "none"
+//   | "introEdit"
+//   | "profilePic"
+//   | "updatePhoto"
+//   | "imageEditor";
 type ModalStep =
   | "none"
   | "introEdit"
   | "profilePic"
   | "updatePhoto"
-  | "imageEditor";
+  | "imageEditor"
+  | "coverEditor";
 
 const IntroCard: React.FC = () => {
   const { user } = useAuth();
@@ -53,6 +61,20 @@ const IntroCard: React.FC = () => {
             />
           ) : (
             <div className="w-full h-full bg-gray-300"></div>
+          )}
+
+          {isOwnProfile && (
+            <button
+              title={coverPhoto ? "Edit Cover Photo" : "Add Cover Photo"}
+              onClick={() => setModalStep("coverEditor")}
+              className="absolute top-3 right-3 p-2 bg-white rounded-full shadow-md hover:bg-gray-100 transition"
+            >
+              {coverPhoto ? (
+                <MdEdit size={20} className="text-gray-700" />
+              ) : (
+                <MdPhotoCamera size={20} className="text-gray-700" />
+              )}
+            </button>
           )}
 
           <div
@@ -138,6 +160,13 @@ const IntroCard: React.FC = () => {
           originalImageFile={fileToEdit}
           onClose={() => setModalStep("updatePhoto")}
           onSaveAndClose={closeAllModals}
+        />
+      )}
+
+      {modalStep === "coverEditor" && (
+        <CoverImageEditorModal
+          onClose={closeAllModals}
+          initialCoverUrl={coverPhoto || ""}
         />
       )}
     </>

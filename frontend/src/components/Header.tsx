@@ -7,7 +7,7 @@ import { IoMdNotifications } from "react-icons/io";
 import { Link } from "react-router-dom";
 import ProfileMenu from "./ProfileMenu";
 // import { useAuth } from "../context/AuthContext";
-
+// import { useProfileData } from "../../context/ProfileContext";
 
 const Header: React.FC = () => {
   // const { user } = useAuth();

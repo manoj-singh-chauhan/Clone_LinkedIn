@@ -9,7 +9,6 @@ import AboutSection from "../components/profile/AboutSection";
 
 const ProfilePage: React.FC = () => {
   const { userId } = useParams<{ userId: string }>();
-
   const queryKey = ["profile", Number(userId)];
 
   const { data, isLoading, isError } = useQuery<FullProfileResponse, Error>({

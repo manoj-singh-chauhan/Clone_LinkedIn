@@ -43,13 +43,13 @@ export const login = async (req: Request, res: Response) => {
   try {
     const { email, password } = req.body;
 
-    const { user, token, name } = await loginUser(email, password);
+    const { user, token } = await loginUser(email, password);
 
     res.cookie("token", token, COOKIE_OPTIONS);
 
     res.json({
       message: "Login successful",
-      user: { id: user.id, email: user.email, name: name },
+      user: { id: user.id, email: user.email},
     });
   } catch (err: any) {
     res.status(400).json({ error: err.message });
@@ -93,13 +93,13 @@ export const googleAuth = async (req: Request, res: Response) => {
   try {
     const { idToken } = req.body;
 
-    const { user, token, name } = await googleLogin(idToken);
+    const { user, token } = await googleLogin(idToken);
 
     res.cookie("token", token, COOKIE_OPTIONS);
 
     res.status(200).json({
       message: "Google login successful",
-      user: { id: user.id, email: user.email, name: name },
+      user: { id: user.id, email: user.email },
     });
   } catch (err: any) {
     res.status(400).json({ error: err.message });
